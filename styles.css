@@ -674,6 +674,58 @@ h1 {
   line-height: 1.75;
 }
 
+.detail-skills {
+  margin: 2px 0 0;
+}
+
+.detail-skills-label {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9b87c4;
+}
+
+.detail-skills-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 244, 253, 0.94));
+  border: 1px solid rgba(165, 115, 241, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.skill-chip--compact {
+  padding: 4px 9px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.skill-chip--more {
+  font-weight: 700;
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.roster-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
 .detail-meta {
   margin: 0;
   line-height: 1.6;

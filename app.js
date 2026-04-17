@@ -431,6 +431,36 @@ function memberSkillsList(member) {
   return Array.isArray(member?.skills) ? member.skills.filter(Boolean) : [];
 }
 
+function renderDetailSkillsSection(member) {
+  const skills = memberSkillsList(member);
+  if (!skills.length) return "";
+  const tint = member.color || "#7447f5";
+  const chips = skills
+    .map((s) => `<span class="skill-chip" style="border-color:${tint}55">${escapeHtml(String(s))}</span>`)
+    .join("");
+  return `
+    <div class="detail-skills" aria-label="Skills from profile data">
+      <p class="detail-skills-label">Skills</p>
+      <div class="detail-skills-chips">${chips}</div>
+    </div>`;
+}
+
+function renderRosterSkillsChips(member, maxVisible = 5) {
+  const skills = memberSkillsList(member);
+  if (!skills.length) return "";
+  const tint = member.color || "#7447f5";
+  const shown = skills.slice(0, maxVisible);
+  const extra = skills.length - shown.length;
+  const chips = shown
+    .map((s) => `<span class="skill-chip skill-chip--compact" style="border-color:${tint}44">${escapeHtml(String(s))}</span>`)
+    .join("");
+  const more =
+    extra > 0
+      ? `<span class="skill-chip skill-chip--compact skill-chip--more" style="border-color:${tint}44">+${extra} more</span>`
+      : "";
+  return `<div class="roster-skills" aria-label="Skills">${chips}${more}</div>`;
+}
+
 function renderMarksSyncPanel() {
   const el = document.getElementById("marks-sync-panel");
   if (!el) return;
@@ -926,6 +956,7 @@ function renderDetail(member) {
       </div>
       <h2 class="detail-name">${member.name}</h2>
       <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
+      ${renderDetailSkillsSection(member)}
       <div class="detail-markers" data-entity-id="${member.entityId}">
         <div class="detail-markers-label">Your rating and tag</div>
         <div class="detail-markers-controls">
@@ -979,6 +1010,7 @@ function renderRoster(list) {
             ${renderPastilleRow(member.entityId, true)}
           </div>
           <p class="roster-description">${truncate(member.description, 175)}</p>
+          ${renderRosterSkillsChips(member)}
           ${renderSpaceLinks(member, "card")}
           ${renderSocialLinks(member, "card")}
         </article>
