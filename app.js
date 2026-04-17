@@ -215,7 +215,6 @@ const rosterGrid = document.querySelector("#roster-grid");
 const spotlightFilters = document.querySelector("#spotlight-filters");
 const detailPanel = document.querySelector("#detail-panel");
 const selectionSummary = document.querySelector("#selection-summary");
-const shuffleButton = document.querySelector("#shuffle-button");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -614,10 +613,6 @@ spotlightFilters.addEventListener("click", (event) => {
   state.rosterFilter = button.dataset.rosterFilter;
   renderSpotlightFilters(activeMembers());
   renderRoster(activeMembers());
-});
-
-shuffleButton.addEventListener("click", () => {
-  state.phase += Math.PI / 3;
 });
 
 canvas.addEventListener("mousemove", (event) => {
