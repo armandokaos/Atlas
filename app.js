@@ -738,14 +738,14 @@ function drawFrame() {
       targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.72);
     }
 
-    member.vx += (targetX - member.x) * layoutPull;
-    member.vy += (targetY - member.y) * layoutPull;
+    const curX = Number.isFinite(member.x) ? member.x : targetX;
+    const curY = Number.isFinite(member.y) ? member.y : targetY;
+    member.vx += (targetX - curX) * layoutPull;
+    member.vy += (targetY - curY) * layoutPull;
     member.vx *= layoutDamp;
     member.vy *= layoutDamp;
-    member.x = member.x || targetX;
-    member.y = member.y || targetY;
-    member.x += member.vx;
-    member.y += member.vy;
+    member.x = curX + member.vx;
+    member.y = curY + member.vy;
   });
 
   list.forEach((member) => {
