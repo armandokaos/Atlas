@@ -292,6 +292,7 @@ function setPersonalRating(entityId, value) {
     personalMarks.ratings[entityId] = value;
   }
   savePersonalMarks();
+  void marksCloudPersistEntity(entityId);
 }
 
 function setPersonalBadge(entityId, key) {
@@ -302,6 +303,244 @@ function setPersonalBadge(entityId, key) {
     else personalMarks.badges[entityId] = key;
   }
   savePersonalMarks();
+  void marksCloudPersistEntity(entityId);
+}
+
+const cloudState = { email: null, message: "", busy: false };
+let __supabaseClient = null;
+let __cloudUserId = null;
+
+function cloudConfigured() {
+  const c = window.GEO_ATLAS_CLOUD;
+  return Boolean(c?.supabaseUrl?.trim() && c?.supabaseAnonKey?.trim());
+}
+
+async function ensureSupabaseClient() {
+  if (__supabaseClient) return __supabaseClient;
+  if (!cloudConfigured()) return null;
+  try {
+    const mod = await import("https://esm.sh/@supabase/supabase-js@2.49.1");
+    const { createClient } = mod;
+    __supabaseClient = createClient(window.GEO_ATLAS_CLOUD.supabaseUrl.trim(), window.GEO_ATLAS_CLOUD.supabaseAnonKey.trim());
+    return __supabaseClient;
+  } catch (e) {
+    console.warn("[GeoAtlas] Supabase client failed to load", e);
+    return null;
+  }
+}
+
+async function pullMarksFromCloud() {
+  const sb = await ensureSupabaseClient();
+  if (!sb || !__cloudUserId) return;
+  const { data, error } = await sb.from("user_marks").select("entity_id, stars, badge");
+  if (error) {
+    console.warn("[GeoAtlas] pull marks", error.message);
+    return;
+  }
+  for (const row of data || []) {
+    if (row.stars >= 1 && row.stars <= 5) personalMarks.ratings[row.entity_id] = row.stars;
+    else delete personalMarks.ratings[row.entity_id];
+    if (BADGE_KEYS.includes(row.badge)) personalMarks.badges[row.entity_id] = row.badge;
+    else delete personalMarks.badges[row.entity_id];
+  }
+  savePersonalMarks();
+}
+
+async function pushAllMarksToCloud() {
+  const sb = await ensureSupabaseClient();
+  if (!sb || !__cloudUserId) return;
+  const ids = new Set([...Object.keys(personalMarks.ratings), ...Object.keys(personalMarks.badges)]);
+  const rows = [];
+  for (const entityId of ids) {
+    const stars = getPersonalRating(entityId) || null;
+    const badge = getPersonalBadge(entityId) || null;
+    if (stars || badge) rows.push({ user_id: __cloudUserId, entity_id: entityId, stars, badge });
+  }
+  if (rows.length) {
+    const { error } = await sb.from("user_marks").upsert(rows, { onConflict: "user_id,entity_id" });
+    if (error) console.warn("[GeoAtlas] push all marks", error.message);
+  }
+}
+
+async function marksCloudPersistEntity(entityId) {
+  const sb = await ensureSupabaseClient();
+  if (!sb || !__cloudUserId) return;
+  const stars = getPersonalRating(entityId) || null;
+  const badge = getPersonalBadge(entityId) || null;
+  if (!stars && !badge) {
+    const { error } = await sb.from("user_marks").delete().eq("user_id", __cloudUserId).eq("entity_id", entityId);
+    if (error) console.warn("[GeoAtlas] delete mark", error.message);
+    return;
+  }
+  const { error } = await sb
+    .from("user_marks")
+    .upsert({ user_id: __cloudUserId, entity_id: entityId, stars, badge }, { onConflict: "user_id,entity_id" });
+  if (error) console.warn("[GeoAtlas] upsert mark", error.message);
+}
+
+function exportMarksJson() {
+  const body = JSON.stringify({ v: 1, ratings: personalMarks.ratings, badges: personalMarks.badges }, null, 2);
+  const blob = new Blob([body], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `geo-atlas-marks-${new Date().toISOString().slice(0, 10)}.json`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function mergeImportedMarks(data) {
+  if (!data || typeof data !== "object") throw new Error("Invalid");
+  if (data.ratings && typeof data.ratings === "object") {
+    Object.assign(personalMarks.ratings, data.ratings);
+  }
+  if (data.badges && typeof data.badges === "object") {
+    Object.assign(personalMarks.badges, data.badges);
+  }
+  for (const k of Object.keys(personalMarks.ratings)) {
+    let r = personalMarks.ratings[k];
+    if (typeof r === "string") r = Number(r);
+    if (typeof r !== "number" || r < 1 || r > 5) delete personalMarks.ratings[k];
+    else personalMarks.ratings[k] = r;
+  }
+  for (const k of Object.keys(personalMarks.badges)) {
+    if (!BADGE_KEYS.includes(personalMarks.badges[k])) delete personalMarks.badges[k];
+  }
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderMarksSyncPanel() {
+  const el = document.getElementById("marks-sync-panel");
+  if (!el) return;
+  const hasCloud = cloudConfigured();
+  const signed = Boolean(cloudState.email);
+  const cloudBlock = hasCloud
+    ? `
+    <div class="marks-sync-cloud">
+      <p class="marks-sync-cloud-title">Cloud sync</p>
+      ${
+        signed
+          ? `<p class="marks-sync-signed">Signed in as <strong>${escapeHtml(cloudState.email)}</strong></p>
+             <button type="button" class="marks-sync-btn marks-sync-btn--ghost" id="marks-cloud-signout">Sign out</button>`
+          : `<form class="marks-sync-form" id="marks-cloud-form" action="#" method="dialog">
+               <input class="marks-sync-input" type="email" id="marks-cloud-email" autocomplete="email" placeholder="Email for magic link" required />
+               <button type="submit" class="marks-sync-btn" id="marks-cloud-submit" ${cloudState.busy ? "disabled" : ""}>Email sign-in link</button>
+             </form>`
+      }
+      <p class="marks-sync-msg" id="marks-cloud-msg" role="status">${escapeHtml(cloudState.message)}</p>
+    </div>`
+    : `<p class="marks-sync-hint">For permanent cross-device sync, connect Supabase (see <a href="./README-CLOUD-SYNC.md">README-CLOUD-SYNC.md</a>). JSON export is always available.</p>`;
+
+  el.innerHTML = `
+    <div class="marks-sync-inner">
+      <div class="marks-sync-row">
+        <p class="marks-sync-kicker">Your ratings &amp; tags</p>
+        <div class="marks-sync-actions">
+          <button type="button" class="marks-sync-btn" id="marks-export-btn">Export JSON</button>
+          <button type="button" class="marks-sync-btn marks-sync-btn--ghost" id="marks-import-btn">Import JSON</button>
+          <input type="file" id="marks-import-input" accept="application/json,.json" hidden />
+        </div>
+      </div>
+      ${cloudBlock}
+    </div>`;
+
+  el.querySelector("#marks-export-btn")?.addEventListener("click", () => exportMarksJson());
+
+  const importInput = el.querySelector("#marks-import-input");
+  const importBtn = el.querySelector("#marks-import-btn");
+  importBtn?.addEventListener("click", () => importInput?.click());
+  importInput?.addEventListener("change", () => {
+    const file = importInput.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        mergeImportedMarks(JSON.parse(String(reader.result)));
+        savePersonalMarks();
+        void (async () => {
+          await pushAllMarksToCloud();
+          refreshSpotlightUI();
+        })();
+        cloudState.message = "Import merged successfully.";
+      } catch {
+        cloudState.message = "Could not read that JSON file.";
+        renderMarksSyncPanel();
+        return;
+      }
+      importInput.value = "";
+      renderMarksSyncPanel();
+    };
+    reader.readAsText(file);
+  });
+
+  el.querySelector("#marks-cloud-signout")?.addEventListener("click", async () => {
+    const sb = await ensureSupabaseClient();
+    cloudState.busy = true;
+    renderMarksSyncPanel();
+    await sb?.auth.signOut();
+    cloudState.busy = false;
+    cloudState.message = "Signed out.";
+    renderMarksSyncPanel();
+  });
+
+  el.querySelector("#marks-cloud-form")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const sb = await ensureSupabaseClient();
+    if (!sb) return;
+    const email = el.querySelector("#marks-cloud-email")?.value?.trim();
+    if (!email) return;
+    cloudState.busy = true;
+    cloudState.message = "";
+    renderMarksSyncPanel();
+    const redirect = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirect },
+    });
+    cloudState.busy = false;
+    cloudState.message = error ? error.message : "Check your inbox for the sign-in link.";
+    renderMarksSyncPanel();
+  });
+}
+
+async function initCloudAuth() {
+  if (!cloudConfigured()) {
+    renderMarksSyncPanel();
+    return;
+  }
+  const sb = await ensureSupabaseClient();
+  if (!sb) {
+    renderMarksSyncPanel();
+    return;
+  }
+  const { data } = await sb.auth.getSession();
+  __cloudUserId = data.session?.user?.id ?? null;
+  cloudState.email = data.session?.user?.email ?? null;
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    __cloudUserId = session?.user?.id ?? null;
+    cloudState.email = session?.user?.email ?? null;
+    if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+      await pullMarksFromCloud();
+      await pushAllMarksToCloud();
+    }
+    if (event === "SIGNED_IN") cloudState.message = "Signed in. Marks synced.";
+    if (event === "SIGNED_OUT") cloudState.message = "";
+    renderMarksSyncPanel();
+    refreshSpotlightUI();
+  });
+
+  renderMarksSyncPanel();
 }
 
 const __galaxyThemeForReset = { theme: state.theme };
@@ -680,7 +919,7 @@ function renderDetail(member) {
           ${renderStarRow(member.entityId, false)}
           ${renderPastilleRow(member.entityId, false)}
         </div>
-        <p class="detail-markers-hint">Saved on this device only.</p>
+        <p class="detail-markers-hint">Stored on this device. Use Export JSON or cloud sign-in for a permanent backup.</p>
       </div>
         </div>
       </div>
@@ -1097,15 +1336,18 @@ function syncUI() {
 }
 
 loadPersonalMarks();
-resizeCanvas();
-syncUI();
-requestAnimationFrame(() => {
+void (async () => {
+  await initCloudAuth();
+  resizeCanvas();
+  syncUI();
   requestAnimationFrame(() => {
-    resizeCanvas();
-    syncUI();
+    requestAnimationFrame(() => {
+      resizeCanvas();
+      syncUI();
+    });
   });
-});
-requestAnimationFrame(drawFrame);
+  requestAnimationFrame(drawFrame);
+})();
 
 if (canvasWrap && typeof ResizeObserver !== "undefined") {
   const ro = new ResizeObserver(() => {
