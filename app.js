@@ -526,8 +526,12 @@ function updateSummary(list) {
 
 function anchorMap(list, width, height) {
   const themes = [...new Set(list.map((member) => member.theme))];
-  const radiusX = width * 0.32;
-  const radiusY = height * 0.28;
+  if (themes.length === 1) {
+    const theme = themes[0];
+    return new Map([[theme, { x: width / 2, y: height / 2 }]]);
+  }
+  const radiusX = width * 0.34;
+  const radiusY = height * 0.3;
   return new Map(
     themes.map((theme, index) => {
       const angle = state.phase + (index / Math.max(themes.length, 1)) * Math.PI * 2;
@@ -568,8 +572,13 @@ function drawFrame() {
   ctx.fillRect(0, 0, width, height);
 
   ctx.save();
+  const singleThemeDisk = anchors.size === 1;
   const orbitScale = galaxyOrbitScale();
-  const ringRadius = isGalaxyThemeFocus() ? 118 : 90;
+  const ringRadius = singleThemeDisk
+    ? Math.min(width, height) * 0.46
+    : isGalaxyThemeFocus()
+      ? 118
+      : 90;
   anchors.forEach((anchor, theme) => {
     const color = palette[theme] || "#94A3B8";
     ctx.beginPath();
@@ -584,21 +593,45 @@ function drawFrame() {
       : '500 12px system-ui, "Avenir Next", "Segoe UI", sans-serif';
     const label = String(theme);
     const tw = ctx.measureText(label).width;
-    ctx.fillText(label, anchor.x - tw / 2, anchor.y - ringRadius - 14);
+    const labelY = singleThemeDisk
+      ? Math.max(18, anchor.y - ringRadius + 20)
+      : anchor.y - ringRadius - 14;
+    ctx.fillText(label, anchor.x - tw / 2, labelY);
   });
   ctx.restore();
+
+  const layoutPull = singleThemeDisk ? 0.034 : 0.012;
+  const layoutDamp = singleThemeDisk ? 0.9 : 0.92;
 
   list.forEach((member, index) => {
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
     const angle = member.seed + index * 0.07 + performance.now() * 0.00008;
-    const orbit = (34 + (index % 12) * 12 + member.spaceCount * 6) * orbitScale;
-    const targetX = anchor.x + Math.cos(angle) * orbit;
-    const targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.7);
+    let targetX;
+    let targetY;
 
-    member.vx += (targetX - member.x) * 0.012;
-    member.vy += (targetY - member.y) * 0.012;
-    member.vx *= 0.92;
-    member.vy *= 0.92;
+    if (singleThemeDisk) {
+      const n = Math.max(list.length, 1);
+      const idx = index + 1;
+      const golden = idx * 2.39996322972865332;
+      const edgePad = 72;
+      const rMax = Math.min(width, height) * 0.5 - edgePad;
+      const r = rMax * Math.sqrt(idx / (n + 1));
+      const wobble = Math.sin(performance.now() * 0.00032 + member.seed * 3.9) * 6;
+      const orbit = Math.max(14, r + wobble);
+      const spin = state.phase * 0.1;
+      targetX = anchor.x + Math.cos(golden + spin) * orbit;
+      targetY = anchor.y + Math.sin(golden + spin) * orbit;
+    } else {
+      const viewScale = Math.min(1.55, Math.min(width, height) / 560);
+      const orbit = (36 + (index % 12) * 14 + member.spaceCount * 7) * orbitScale * viewScale;
+      targetX = anchor.x + Math.cos(angle) * orbit;
+      targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.72);
+    }
+
+    member.vx += (targetX - member.x) * layoutPull;
+    member.vy += (targetY - member.y) * layoutPull;
+    member.vx *= layoutDamp;
+    member.vy *= layoutDamp;
     member.x = member.x || targetX;
     member.y = member.y || targetY;
     member.x += member.vx;
