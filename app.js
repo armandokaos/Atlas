@@ -574,8 +574,10 @@ function drawFrame() {
   ctx.save();
   const singleThemeDisk = anchors.size === 1;
   const orbitScale = galaxyOrbitScale();
+  const diskHalfW = singleThemeDisk ? Math.max(64, width * 0.5 - 40) : 0;
+  const diskHalfH = singleThemeDisk ? Math.max(64, height * 0.5 - 76) : 0;
   const ringRadius = singleThemeDisk
-    ? Math.min(width, height) * 0.46
+    ? Math.max(diskHalfW, diskHalfH)
     : isGalaxyThemeFocus()
       ? 118
       : 90;
@@ -584,7 +586,11 @@ function drawFrame() {
     ctx.beginPath();
     ctx.strokeStyle = `${color}25`;
     ctx.lineWidth = isGalaxyThemeFocus() ? 1.25 : 1;
-    ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
+    if (singleThemeDisk && typeof ctx.ellipse === "function") {
+      ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
+    } else {
+      ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
+    }
     ctx.stroke();
 
     ctx.fillStyle = "#796f99";
@@ -594,14 +600,14 @@ function drawFrame() {
     const label = String(theme);
     const tw = ctx.measureText(label).width;
     const labelY = singleThemeDisk
-      ? Math.max(18, anchor.y - ringRadius + 20)
+      ? Math.max(14, anchor.y - diskHalfH + 16)
       : anchor.y - ringRadius - 14;
     ctx.fillText(label, anchor.x - tw / 2, labelY);
   });
   ctx.restore();
 
-  const layoutPull = singleThemeDisk ? 0.034 : 0.012;
-  const layoutDamp = singleThemeDisk ? 0.9 : 0.92;
+  const layoutPull = singleThemeDisk ? 0.072 : 0.012;
+  const layoutDamp = singleThemeDisk ? 0.88 : 0.92;
 
   list.forEach((member, index) => {
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
@@ -613,14 +619,13 @@ function drawFrame() {
       const n = Math.max(list.length, 1);
       const idx = index + 1;
       const golden = idx * 2.39996322972865332;
-      const edgePad = 72;
-      const rMax = Math.min(width, height) * 0.5 - edgePad;
-      const r = rMax * Math.sqrt(idx / (n + 1));
-      const wobble = Math.sin(performance.now() * 0.00032 + member.seed * 3.9) * 6;
-      const orbit = Math.max(14, r + wobble);
+      const normR = Math.sqrt(idx / (n + 1));
+      const wobbleX = Math.sin(performance.now() * 0.00028 + member.seed * 3.9) * 4;
+      const wobbleY = Math.cos(performance.now() * 0.00026 + member.seed * 2.7) * 4;
       const spin = state.phase * 0.1;
-      targetX = anchor.x + Math.cos(golden + spin) * orbit;
-      targetY = anchor.y + Math.sin(golden + spin) * orbit;
+      const t = golden + spin;
+      targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
+      targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
     } else {
       const viewScale = Math.min(1.55, Math.min(width, height) / 560);
       const orbit = (36 + (index % 12) * 14 + member.spaceCount * 7) * orbitScale * viewScale;
