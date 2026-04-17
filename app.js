@@ -1040,85 +1040,144 @@ function truncateGalaxyLabel(name, max = 20) {
   return `${name.slice(0, max - 1).trim()}…`;
 }
 
-function truncateSkillLabelForCanvas(s, max = 22) {
+function truncateSkillLabelForCanvas(s, max = 18) {
   const t = String(s || "").trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1).trim()}…`;
 }
 
-/** Skill spokes from a center point (used only in the separate skills modal canvas). */
-function drawSkillsBurstRadial(ctx, skills, mx, my, radius, viewW, viewH) {
+function skillAngleJitter(skill) {
+  let h = 2166136261;
+  const str = String(skill);
+  for (let i = 0; i < str.length; i += 1) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 1000 - 0.5;
+}
+
+function roundRectPath(ctx, x, y, w, h, rad) {
+  const r = Math.min(rad, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** Curved constellation-style skill graph (modal canvas only). No arrowheads. */
+function drawSkillsBurstRadial(ctx, skills, mx, my, radius, viewW, viewH, hubColor) {
   if (!skills?.length) return;
   const n = skills.length;
-  const margin = 10;
-  const maxReach = Math.min(viewW, viewH) * 0.36;
-  const lineLen = Math.min(160, 64 + n * 12, maxReach - radius - 24);
-  if (lineLen < 28) return;
-
-  const lineColor = "rgba(37, 99, 235, 0.88)";
-  const lineSoft = "rgba(37, 99, 235, 0.22)";
-  const headSize = 6;
-
+  const margin = 18;
+  const labelR = Math.min(viewW, viewH) * 0.36;
+  const font = '600 12px system-ui, "Avenir Next", "Segoe UI", sans-serif';
   ctx.save();
-  ctx.font = '600 11px system-ui, "Avenir Next", "Segoe UI", sans-serif';
-  for (let i = 0; i < n; i += 1) {
-    const ang = -Math.PI / 2 + (i / n) * Math.PI * 2;
-    const ux = Math.cos(ang);
-    const uy = Math.sin(ang);
-    const r0 = radius + 5;
-    const x0 = mx + ux * r0;
-    const y0 = my + uy * r0;
-    let r1 = r0 + lineLen;
-    let x1 = mx + ux * r1;
-    let y1 = my + uy * r1;
-    for (let k = 0; k < 8 && (x1 < margin || x1 > viewW - margin || y1 < margin || y1 > viewH - margin); k += 1) {
-      r1 = r0 + (r1 - r0) * 0.86;
-      x1 = mx + ux * r1;
-      y1 = my + uy * r1;
-    }
+  ctx.font = font;
 
-    ctx.beginPath();
-    ctx.strokeStyle = lineSoft;
-    ctx.lineWidth = 4;
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 1.85;
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-
-    const bx = x1 - ux * headSize;
-    const by = y1 - uy * headSize;
-    const perp = 3.2;
-    ctx.beginPath();
-    ctx.fillStyle = lineColor;
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(bx - uy * perp, by + ux * perp);
-    ctx.lineTo(bx + uy * perp, by - ux * perp);
-    ctx.closePath();
-    ctx.fill();
-
-    const text = truncateSkillLabelForCanvas(skills[i], 20);
-    const pad = 12;
+  const layout = skills.map((skill, i) => {
+    const base = -Math.PI / 2 + (i / n) * Math.PI * 2 + skillAngleJitter(skill) * 0.42;
+    let tx = mx + Math.cos(base) * labelR;
+    let ty = my + Math.sin(base) * labelR;
+    const text = truncateSkillLabelForCanvas(skill, 18);
     const tw = ctx.measureText(text).width;
-    let tx = x1 + ux * pad;
-    let ty = y1 + uy * pad;
-    tx = Math.max(margin + tw / 2, Math.min(viewW - margin - tw / 2, tx));
-    ty = Math.max(margin + 8, Math.min(viewH - margin - 8, ty));
+    const padX = 12;
+    const padY = 9;
+    const boxW = tw + padX * 2;
+    const boxH = 30;
+    tx = Math.max(margin + boxW / 2, Math.min(viewW - margin - boxW / 2, tx));
+    ty = Math.max(margin + boxH / 2, Math.min(viewH - margin - boxH / 2, ty));
+    return { ang: base, tx, ty, text, tw, boxW, boxH, padX, padY };
+  });
+
+  const hubEdge = radius + 4;
+
+  layout.forEach((L, i) => {
+    const dx = L.tx - mx;
+    const dy = L.ty - my;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const sx = mx + nx * hubEdge;
+    const sy = my + ny * hubEdge;
+    const ex = L.tx - nx * (L.boxW / 2 + 6);
+    const ey = L.ty - ny * (L.boxH / 2 + 5);
+
+    const midX = (sx + ex) / 2;
+    const midY = (sy + ey) / 2;
+    const px = -(ey - sy);
+    const py = ex - sx;
+    const pl = Math.hypot(px, py) || 1;
+    const bend = (20 + (i % 4) * 10) * (i % 2 === 0 ? 1 : -1);
+    const cx = midX + (px / pl) * bend;
+    const cy = midY + (py / pl) * bend;
+
+    const grd = ctx.createLinearGradient(sx, sy, ex, ey);
+    grd.addColorStop(0, "rgba(124, 92, 220, 0.22)");
+    grd.addColorStop(0.45, "rgba(99, 102, 241, 0.38)");
+    grd.addColorStop(1, "rgba(167, 139, 250, 0.18)");
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(cx, cy, ex, ey);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(cx, cy, ex, ey);
+    ctx.strokeStyle = grd;
+    ctx.lineWidth = 2.1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.arc(ex, ey, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(99, 102, 241, 0.85)";
+    ctx.arc(ex, ey, 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  layout.forEach((L) => {
+    const x = L.tx - L.boxW / 2;
+    const y = L.ty - L.boxH / 2;
+    roundRectPath(ctx, x, y, L.boxW, L.boxH, 999);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(116, 71, 245, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 3.5;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
-    ctx.strokeText(text, tx, ty);
-    ctx.fillStyle = "#1e293b";
-    ctx.fillText(text, tx, ty);
-  }
+    ctx.fillStyle = "#2a2438";
+    ctx.fillText(L.text, L.tx, L.ty);
+  });
+
+  ctx.beginPath();
+  ctx.arc(mx, my, radius + 10, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(mx, my, radius + 4, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = hubColor || "#7447f5";
+  ctx.shadowBlur = 22;
+  ctx.shadowColor = `${hubColor || "#7447f5"}66`;
+  ctx.arc(mx, my, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(mx, my, radius - 3, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+  ctx.fill();
+
   ctx.restore();
 }
 
@@ -1537,8 +1596,8 @@ function paintSkillsVizModal(member) {
   if (!wrap || !canvas || !member || wrap.hidden) return;
   const raw = window.devicePixelRatio || 1;
   const dpr = Math.min(2, raw);
-  const w = Math.max(320, Math.floor(wrap.clientWidth || 520));
-  const h = Math.min(440, Math.max(288, Math.floor(w * 0.62)));
+  const w = Math.max(340, Math.floor(wrap.clientWidth || 560));
+  const h = Math.min(500, Math.max(320, Math.floor(w * 0.66)));
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
   canvas.style.width = `${w}px`;
@@ -1548,22 +1607,22 @@ function paintSkillsVizModal(member) {
   ctx.clearRect(0, 0, w, h);
   const mx = w / 2;
   const my = h / 2;
-  const radGrad = ctx.createRadialGradient(mx, my, 0, mx, my, h * 0.58);
-  radGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
-  radGrad.addColorStop(0.5, "rgba(248, 244, 253, 0.97)");
-  radGrad.addColorStop(1, "rgba(225, 214, 248, 0.55)");
+  const radGrad = ctx.createRadialGradient(mx, my, 0, mx, my, Math.max(w, h) * 0.55);
+  radGrad.addColorStop(0, "rgba(255, 255, 255, 0.99)");
+  radGrad.addColorStop(0.42, "rgba(250, 245, 255, 0.96)");
+  radGrad.addColorStop(1, "rgba(218, 206, 242, 0.65)");
   ctx.fillStyle = radGrad;
   ctx.fillRect(0, 0, w, h);
-  const r = 18;
-  ctx.beginPath();
-  ctx.fillStyle = member.color || "#7447f5";
-  ctx.shadowBlur = 26;
-  ctx.shadowColor = `${(member.color || "#7447f5")}88`;
-  ctx.arc(mx, my, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  const vignette = ctx.createRadialGradient(mx, my, Math.min(w, h) * 0.25, mx, my, Math.max(w, h) * 0.72);
+  vignette.addColorStop(0, "rgba(255, 255, 255, 0)");
+  vignette.addColorStop(1, "rgba(88, 72, 120, 0.06)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, w, h);
+
+  const r = 20;
+  const hub = member.color || "#7447f5";
   const skills = memberSkillsList(member);
-  if (skills.length) drawSkillsBurstRadial(ctx, skills, mx, my, r, w, h);
+  if (skills.length) drawSkillsBurstRadial(ctx, skills, mx, my, r, w, h, hub);
 }
 
 function openSkillsVizModal(member) {
