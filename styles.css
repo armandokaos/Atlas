@@ -270,6 +270,42 @@ h1 {
   font-size: 0.88rem;
 }
 
+.theme-pill--compact {
+  padding: 7px 11px;
+  gap: 7px;
+  font-size: 0.86rem;
+}
+
+.theme-pill--compact .theme-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.theme-pill--compact .theme-pill-count {
+  font-size: 0.78rem;
+}
+
+.spotlight-theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.spotlight-theme-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.theme-pills--spotlight {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
 .visual-grid {
   display: grid;
   grid-template-columns: 1fr;

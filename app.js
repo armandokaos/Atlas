@@ -15,6 +15,20 @@ const BOSS_COLOR = "#FFD84D";
 
 const ROSTER_PAGE_SIZE = 12;
 
+/** First-page roster order; names must match `member.name` in members-data (see audit in init). */
+const ROSTER_PAGE1_PIN_ORDER = [
+  "Kevin",
+  "Kevin Primicerio",
+  "Iris",
+  "MaximVL",
+  "Thomas Freestone",
+  "Federico Sendra",
+  "Pablo Ragalli",
+  "Farida Ahmed",
+  "Ishita Sharma",
+  "Victor Amigo",
+];
+
 const data = window.GEO_CURATORS_DATA;
 const socialIcons = {
   x: `
@@ -198,7 +212,20 @@ const spotlightPriority = new Map([
   ["Dan3", -1],
   ["Joueurs", -2],
 ]);
-const demoMember = members.find((member) => member.name === "Preston Mantel") || bossMember || members[0] || null;
+
+const __rosterPinNameSet = new Set(members.map((m) => m.name));
+ROSTER_PAGE1_PIN_ORDER.forEach((name) => {
+  if (!__rosterPinNameSet.has(name)) {
+    console.warn(`[GeoAtlas] Roster page-1 pin missing from loaded members: "${name}"`);
+  }
+});
+
+const demoMember =
+  ROSTER_PAGE1_PIN_ORDER.map((n) => members.find((m) => m.name === n)).find(Boolean) ||
+  members.find((member) => member.name === "Preston Mantel") ||
+  bossMember ||
+  members[0] ||
+  null;
 
 const state = {
   query: "",
@@ -219,6 +246,8 @@ if (typeof ctx.imageSmoothingQuality === "string") {
 }
 const searchInput = document.querySelector("#search-input");
 const themePills = document.querySelector("#theme-pills");
+const spotlightThemeStrip = document.querySelector("#spotlight-theme-strip");
+const canvasWrap = document.querySelector(".canvas-wrap");
 const rosterGrid = document.querySelector("#roster-grid");
 const rosterPagination = document.querySelector("#roster-pagination");
 const rosterListShell = document.querySelector("#roster-list-shell");
@@ -326,8 +355,27 @@ function spotlightMembers(list) {
   return list.filter((member) => member.socialLinks?.[state.rosterFilter]);
 }
 
+function rosterPinOrderIndex(name) {
+  const i = ROSTER_PAGE1_PIN_ORDER.indexOf(name);
+  return i === -1 ? 1000 : i;
+}
+
+function hasFullDisplayName(name) {
+  const parts = (name || "")
+    .trim()
+    .split(/\s+/)
+    .filter((t) => /[A-Za-zÀ-ÿ0-9]/.test(t));
+  return parts.length >= 2;
+}
+
 function sortedSpotlightMembers(list) {
   return [...spotlightMembers(list)].sort((a, b) => {
+    const pinA = rosterPinOrderIndex(a.name);
+    const pinB = rosterPinOrderIndex(b.name);
+    if (pinA !== pinB) return pinA - pinB;
+    const fullA = hasFullDisplayName(a.name);
+    const fullB = hasFullDisplayName(b.name);
+    if (fullA !== fullB) return Number(fullB) - Number(fullA);
     const showcaseScore = (spotlightPriority.get(b.name) || 0) - (spotlightPriority.get(a.name) || 0);
     if (showcaseScore) return showcaseScore;
     const bossScore = Number(b.isBoss) - Number(a.isBoss);
@@ -363,7 +411,8 @@ function renderSpotlightFilters(list) {
     .join("");
 }
 
-function buildThemePills() {
+function renderThemePillsInto(container, compact) {
+  if (!container) return;
   const counts = memberSummary.themeCounts;
   const total = memberSummary.totalMembers;
   const pills = [
@@ -381,11 +430,12 @@ function buildThemePills() {
     })),
   ];
 
-  themePills.innerHTML = pills
+  const compactClass = compact ? " theme-pill--compact" : "";
+  container.innerHTML = pills
     .map(
       (pill) => `
         <button
-          class="theme-pill ${state.theme === pill.key ? "active" : ""}"
+          class="theme-pill${compactClass} ${state.theme === pill.key ? "active" : ""}"
           data-theme="${pill.key}"
           type="button"
         >
@@ -396,6 +446,11 @@ function buildThemePills() {
       `,
     )
     .join("");
+}
+
+function buildThemePills() {
+  renderThemePillsInto(themePills, false);
+  renderThemePillsInto(spotlightThemeStrip, true);
 }
 
 function renderDetail(member) {
@@ -548,22 +603,26 @@ function anchorMap(list, width, height) {
   );
 }
 
+function readCanvasCssSize() {
+  const br = canvas.getBoundingClientRect();
+  const width = Math.max(120, Math.round(br.width) || canvas.clientWidth);
+  const height = Math.max(120, Math.round(br.height) || canvas.clientHeight);
+  return { width, height, br };
+}
+
 function resizeCanvas() {
   const raw = window.devicePixelRatio || 1;
   const dpr = Math.min(3, Math.max(1, raw * 1.12));
   const bounds = canvas.getBoundingClientRect();
-  canvas.width = Math.max(1, Math.round(bounds.width * dpr));
-  canvas.height = Math.max(1, Math.round(bounds.height * dpr));
+  const cssW = Math.max(1, bounds.width);
+  const cssH = Math.max(1, bounds.height);
+  canvas.width = Math.max(1, Math.round(cssW * dpr));
+  canvas.height = Math.max(1, Math.round(cssH * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function drawFrame() {
-  window.__galaxyDbgFrame = (window.__galaxyDbgFrame || 0) + 1;
-  const __dbf = window.__galaxyDbgFrame;
-
-  const brSize = canvas.getBoundingClientRect();
-  const width = Math.max(120, Math.round(brSize.width) || canvas.clientWidth);
-  const height = Math.max(120, Math.round(brSize.height) || canvas.clientHeight);
+  const { width, height, br: brSize } = readCanvasCssSize();
   const list = activeMembers();
   const selected = selectedMember(list);
   const hoveredId = state.hoveredId;
@@ -582,40 +641,6 @@ function drawFrame() {
   const orbitScale = galaxyOrbitScale();
   const diskHalfW = singleThemeDisk ? Math.max(64, width * 0.5 - 40) : 0;
   const diskHalfH = singleThemeDisk ? Math.max(64, height * 0.5 - 76) : 0;
-
-  // #region agent log
-  if (__dbf % 48 === 1) {
-    const firstAnchor = anchors.size ? [...anchors.entries()][0] : null;
-    fetch("http://127.0.0.1:7774/ingest/d02dfdf6-77ee-41f7-abb2-591b4c67c578", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
-      body: JSON.stringify({
-        sessionId: "02d565",
-        runId: "post-fix",
-        hypothesisId: "H-A-B-D-E",
-        location: "app.js:drawFrame:layout",
-        message: "canvas + branch + disk half-axes",
-        data: {
-          clientW: width,
-          clientH: height,
-          rectW: brSize.width,
-          rectH: brSize.height,
-          clientWidthRaw: canvas.clientWidth,
-          clientHeightRaw: canvas.clientHeight,
-          theme: state.theme,
-          listLen: list.length,
-          anchorSize: anchors.size,
-          singleThemeDisk,
-          diskHalfW,
-          diskHalfH,
-          firstAnchor,
-          galaxyFocus: isGalaxyThemeFocus(),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   const ringRadius = singleThemeDisk
     ? Math.max(diskHalfW, diskHalfH)
@@ -683,37 +708,6 @@ function drawFrame() {
     member.x += member.vx;
     member.y += member.vy;
   });
-
-  // #region agent log
-  if (__dbf % 48 === 1 && list.length) {
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (const m of list) {
-      if (m.x == null || m.y == null) continue;
-      minX = Math.min(minX, m.x);
-      maxX = Math.max(maxX, m.x);
-      minY = Math.min(minY, m.y);
-      maxY = Math.max(maxY, m.y);
-    }
-    const spreadW = Number.isFinite(maxX - minX) ? maxX - minX : -1;
-    const spreadH = Number.isFinite(maxY - minY) ? maxY - minY : -1;
-    fetch("http://127.0.0.1:7774/ingest/d02dfdf6-77ee-41f7-abb2-591b4c67c578", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
-      body: JSON.stringify({
-        sessionId: "02d565",
-        runId: "post-fix",
-        hypothesisId: "H-C",
-        location: "app.js:drawFrame:bounds",
-        message: "member position spread after physics",
-        data: { minX, maxX, minY, maxY, spreadW, spreadH, clientW: width, clientH: height, singleThemeDisk },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   list.forEach((member) => {
     const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
@@ -818,19 +812,37 @@ function syncUI() {
 buildThemePills();
 resizeCanvas();
 syncUI();
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    resizeCanvas();
+    syncUI();
+  });
+});
 requestAnimationFrame(drawFrame);
+
+if (canvasWrap && typeof ResizeObserver !== "undefined") {
+  const ro = new ResizeObserver(() => {
+    resizeCanvas();
+  });
+  ro.observe(canvasWrap);
+}
 
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
   syncUI();
 });
 
-themePills.addEventListener("click", (event) => {
+function onThemePillClick(event) {
   const button = event.target.closest("[data-theme]");
   if (!button) return;
   state.theme = button.dataset.theme;
   syncUI();
-});
+}
+
+themePills.addEventListener("click", onThemePillClick);
+if (spotlightThemeStrip) {
+  spotlightThemeStrip.addEventListener("click", onThemePillClick);
+}
 
 spotlightFilters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-roster-filter]");
