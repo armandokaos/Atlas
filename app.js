@@ -431,25 +431,6 @@ function memberSkillsList(member) {
   return Array.isArray(member?.skills) ? member.skills.filter(Boolean) : [];
 }
 
-function renderSkillsPills(member, variant = "detail") {
-  const skills = memberSkillsList(member);
-  if (!skills.length) return "";
-  const max = variant === "card" ? 6 : 40;
-  const slice = skills.slice(0, max);
-  const more = skills.length > max ? skills.length - max : 0;
-  const compact = variant === "card" ? " skill-chip--compact" : "";
-  const chips = slice.map((s) => `<span class="skill-chip${compact}">${escapeHtml(s)}</span>`).join("");
-  const overflow = more ? `<span class="skill-chip skill-chip--more${compact}" title="${escapeHtml(skills.slice(max).join(", "))}">+${more}</span>` : "";
-  if (variant === "card") {
-    return `<div class="skill-list skill-list--card" aria-label="Skills">${chips}${overflow}</div>`;
-  }
-  return `
-    <div class="skill-list skill-list--detail">
-      <p class="skill-list-heading">Skills</p>
-      <div class="skill-list-chips">${chips}${overflow}</div>
-    </div>`;
-}
-
 function renderMarksSyncPanel() {
   const el = document.getElementById("marks-sync-panel");
   if (!el) return;
@@ -947,7 +928,6 @@ function renderDetail(member) {
       </div>
       <h2 class="detail-name">${member.name}</h2>
       <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
-      ${renderSkillsPills(member, "detail")}
       <div class="detail-markers" data-entity-id="${member.entityId}">
         <div class="detail-markers-label">Your rating and tag</div>
         <div class="detail-markers-controls">
@@ -996,7 +976,6 @@ function renderRoster(list) {
               ${renderAvatar(member, "avatar-small")}
             </div>
           </div>
-          ${renderSkillsPills(member, "card")}
           <div class="roster-markers">
             ${renderStarRow(member.entityId, true)}
             ${renderPastilleRow(member.entityId, true)}
@@ -1631,7 +1610,7 @@ canvas.addEventListener("click", (event) => {
   state.selectedId = member.entityId;
   renderDetail(member);
   renderRoster(activeMembers());
-  openSkillsVizModal(member);
+  if (memberSkillsList(member).length) openSkillsVizModal(member);
 });
 
 if (rosterGrid) {
