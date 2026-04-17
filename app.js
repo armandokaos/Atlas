@@ -211,7 +211,10 @@ const state = {
 };
 
 const canvas = document.querySelector("#galaxy-canvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: true });
+if (typeof ctx.imageSmoothingQuality === "string") {
+  ctx.imageSmoothingQuality = "high";
+}
 const searchInput = document.querySelector("#search-input");
 const themePills = document.querySelector("#theme-pills");
 const rosterGrid = document.querySelector("#roster-grid");
@@ -479,6 +482,39 @@ function renderRoster(list) {
   `;
 }
 
+function isGalaxyThemeFocus() {
+  return state.theme !== "all";
+}
+
+function galaxyOrbitScale() {
+  return isGalaxyThemeFocus() ? 2.55 : 1;
+}
+
+function memberIsGalaxyHighlighted(member, selected, hoveredId) {
+  return (
+    member.entityId === hoveredId ||
+    member.entityId === selected?.entityId ||
+    member.entityId === state.selectedId
+  );
+}
+
+function memberDisplayRadius(member, selected, hoveredId) {
+  const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
+  let r = member.radius;
+  if (isGalaxyThemeFocus() && member.theme === state.theme) {
+    const richness = Math.min(1, (member.descLength || 0) / 520 + (member.spaceCount || 0) / 10);
+    r *= Math.exp(0.68 + richness * 1.12);
+  }
+  if (highlighted) r += 4;
+  return Math.min(r, 44);
+}
+
+function truncateGalaxyLabel(name, max = 20) {
+  if (!name) return "";
+  if (name.length <= max) return name;
+  return `${name.slice(0, max - 1).trim()}…`;
+}
+
 function updateSummary(list) {
   const count = list.length;
   const activeTheme = state.theme === "all" ? "all themes" : state.theme;
@@ -507,10 +543,11 @@ function anchorMap(list, width, height) {
 }
 
 function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
+  const raw = window.devicePixelRatio || 1;
+  const dpr = Math.min(3, Math.max(1, raw * 1.12));
   const bounds = canvas.getBoundingClientRect();
-  canvas.width = Math.round(bounds.width * dpr);
-  canvas.height = Math.round(bounds.height * dpr);
+  canvas.width = Math.max(1, Math.round(bounds.width * dpr));
+  canvas.height = Math.max(1, Math.round(bounds.height * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -531,24 +568,30 @@ function drawFrame() {
   ctx.fillRect(0, 0, width, height);
 
   ctx.save();
+  const orbitScale = galaxyOrbitScale();
+  const ringRadius = isGalaxyThemeFocus() ? 118 : 90;
   anchors.forEach((anchor, theme) => {
     const color = palette[theme] || "#94A3B8";
     ctx.beginPath();
     ctx.strokeStyle = `${color}25`;
-    ctx.lineWidth = 1;
-    ctx.arc(anchor.x, anchor.y, 90, 0, Math.PI * 2);
+    ctx.lineWidth = isGalaxyThemeFocus() ? 1.25 : 1;
+    ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = "#796f99";
-    ctx.font = '12px "Avenir Next", sans-serif';
-    ctx.fillText(theme, anchor.x - 34, anchor.y - 100);
+    ctx.font = isGalaxyThemeFocus()
+      ? '600 13px system-ui, "Avenir Next", "Segoe UI", sans-serif'
+      : '500 12px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+    const label = String(theme);
+    const tw = ctx.measureText(label).width;
+    ctx.fillText(label, anchor.x - tw / 2, anchor.y - ringRadius - 14);
   });
   ctx.restore();
 
   list.forEach((member, index) => {
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
     const angle = member.seed + index * 0.07 + performance.now() * 0.00008;
-    const orbit = 34 + (index % 12) * 12 + member.spaceCount * 6;
+    const orbit = (34 + (index % 12) * 12 + member.spaceCount * 6) * orbitScale;
     const targetX = anchor.x + Math.cos(angle) * orbit;
     const targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.7);
 
@@ -563,15 +606,12 @@ function drawFrame() {
   });
 
   list.forEach((member) => {
-    const highlighted =
-      member.entityId === hoveredId ||
-      member.entityId === selected?.entityId ||
-      member.entityId === state.selectedId;
-    const radius = highlighted ? member.radius + 2.5 : member.radius;
+    const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
+    const radius = memberDisplayRadius(member, selected, hoveredId);
 
     ctx.beginPath();
-    ctx.fillStyle = `${member.color}${highlighted ? "" : "cc"}`;
-    ctx.shadowBlur = highlighted ? 28 : 16;
+    ctx.fillStyle = `${member.color}${highlighted ? "" : isGalaxyThemeFocus() ? "e6" : "cc"}`;
+    ctx.shadowBlur = highlighted ? 32 : isGalaxyThemeFocus() ? 22 : 16;
     ctx.shadowColor = member.color;
     ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -579,16 +619,44 @@ function drawFrame() {
 
     if (highlighted) {
       ctx.beginPath();
-      ctx.strokeStyle = `${member.color}66`;
-      ctx.lineWidth = 1.5;
-      ctx.arc(member.x, member.y, radius + 8, 0, Math.PI * 2);
+      ctx.strokeStyle = `${member.color}77`;
+      ctx.lineWidth = 2;
+      ctx.arc(member.x, member.y, radius + Math.min(12, radius * 0.35), 0, Math.PI * 2);
       ctx.stroke();
-
-      ctx.fillStyle = "#2b2734";
-      ctx.font = '13px "Avenir Next", sans-serif';
-      ctx.fillText(member.name, member.x + radius + 8, member.y - radius - 6);
     }
   });
+
+  if (isGalaxyThemeFocus()) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = '600 11px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+    list.forEach((member) => {
+      const radius = memberDisplayRadius(member, selected, hoveredId);
+      const label = truncateGalaxyLabel(member.name, 22);
+      const tx = member.x;
+      const ty = member.y + radius + 4;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.strokeText(label, tx, ty);
+      ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? "#120c1f" : "rgba(35, 31, 48, 0.9)";
+      ctx.fillText(label, tx, ty);
+    });
+    ctx.restore();
+  } else {
+    const pin = list.find((m) => m.entityId === hoveredId) || selected;
+    if (pin && (hoveredId || selected)) {
+      const radius = memberDisplayRadius(pin, selected, hoveredId);
+      ctx.save();
+      ctx.fillStyle = "#2b2734";
+      ctx.font = '600 13px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(pin.name, pin.x + radius + 8, pin.y - radius - 4);
+      ctx.restore();
+    }
+  }
 
   state.phase += 0.0009;
   requestAnimationFrame(drawFrame);
@@ -603,9 +671,11 @@ function pickMemberFromPointer(event) {
   let nearest = null;
   let nearestDistance = Infinity;
 
+  const selected = selectedMember(list);
   list.forEach((member) => {
+    const r = memberDisplayRadius(member, selected, state.hoveredId);
     const distance = Math.hypot(member.x - x, member.y - y);
-    if (distance < member.radius + 10 && distance < nearestDistance) {
+    if (distance < r + 12 && distance < nearestDistance) {
       nearest = member;
       nearestDistance = distance;
     }
