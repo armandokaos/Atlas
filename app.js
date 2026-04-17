@@ -627,8 +627,12 @@ function resizeCanvas() {
   const { width: cssW, height: cssH } = readCanvasCssSize();
   const raw = window.devicePixelRatio || 1;
   const dpr = Math.min(3, Math.max(1, raw * 1.12));
-  canvas.width = Math.max(1, Math.round(cssW * dpr));
-  canvas.height = Math.max(1, Math.round(cssH * dpr));
+  const needW = Math.max(1, Math.round(cssW * dpr));
+  const needH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== needW || canvas.height !== needH) {
+    canvas.width = needW;
+    canvas.height = needH;
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -656,6 +660,7 @@ function snapSingleThemeVogelPositions(list) {
 }
 
 function drawFrame() {
+  resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
   const list = activeMembers();
   const selected = selectedMember(list);
