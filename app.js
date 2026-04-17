@@ -711,12 +711,14 @@ function drawFrame() {
   });
   ctx.restore();
 
-  const layoutPull = singleThemeDisk ? 0.072 : 0.012;
-  const layoutDamp = singleThemeDisk ? 0.88 : 0.92;
+  /** Same soft follow as "All" so category view stays alive, not glued to static Vogel targets. */
+  const layoutPull = 0.012;
+  const layoutDamp = 0.92;
+  const angleDrift = performance.now() * 0.00008;
 
   list.forEach((member, index) => {
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
-    const angle = member.seed + index * 0.07 + performance.now() * 0.00008;
+    const angle = member.seed + index * 0.07 + angleDrift;
     let targetX;
     let targetY;
 
@@ -728,7 +730,7 @@ function drawFrame() {
       const wobbleX = Math.sin(performance.now() * 0.00028 + member.seed * 3.9) * 4;
       const wobbleY = Math.cos(performance.now() * 0.00026 + member.seed * 2.7) * 4;
       const spin = state.phase * 0.1;
-      const t = golden + spin;
+      const t = golden + spin + angleDrift;
       targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
       targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
     } else {
