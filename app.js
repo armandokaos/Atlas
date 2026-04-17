@@ -594,6 +594,8 @@ const detailPanel = document.querySelector("#detail-panel");
 const detailCard = document.querySelector(".detail-card");
 const selectionSummary = document.querySelector("#selection-summary");
 const rosterCard = document.querySelector(".roster-card");
+const skillsVizModal = document.getElementById("skills-viz-modal");
+const skillsVizCanvas = document.getElementById("skills-viz-canvas");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -1065,17 +1067,13 @@ function truncateSkillLabelForCanvas(s, max = 22) {
   return `${t.slice(0, max - 1).trim()}…`;
 }
 
-/** Skill spokes from the selected dot (constellation), matching in-card skills. */
-function drawGalaxySkillBurst(ctx, pin, width, height, selected, hoveredId) {
-  const skills = memberSkillsList(pin);
-  if (!skills.length) return;
-  const radius = memberDisplayRadius(pin, selected, hoveredId);
-  const mx = pin.x;
-  const my = pin.y;
+/** Skill spokes from a center point (used only in the separate skills modal canvas). */
+function drawSkillsBurstRadial(ctx, skills, mx, my, radius, viewW, viewH) {
+  if (!skills?.length) return;
   const n = skills.length;
   const margin = 10;
-  const maxReach = Math.min(width, height) * 0.24;
-  const lineLen = Math.min(130, 58 + n * 11, maxReach - radius - 28);
+  const maxReach = Math.min(viewW, viewH) * 0.36;
+  const lineLen = Math.min(160, 64 + n * 12, maxReach - radius - 24);
   if (lineLen < 28) return;
 
   const lineColor = "rgba(37, 99, 235, 0.88)";
@@ -1094,7 +1092,7 @@ function drawGalaxySkillBurst(ctx, pin, width, height, selected, hoveredId) {
     let r1 = r0 + lineLen;
     let x1 = mx + ux * r1;
     let y1 = my + uy * r1;
-    for (let k = 0; k < 8 && (x1 < margin || x1 > width - margin || y1 < margin || y1 > height - margin); k += 1) {
+    for (let k = 0; k < 8 && (x1 < margin || x1 > viewW - margin || y1 < margin || y1 > viewH - margin); k += 1) {
       r1 = r0 + (r1 - r0) * 0.86;
       x1 = mx + ux * r1;
       y1 = my + uy * r1;
@@ -1130,8 +1128,8 @@ function drawGalaxySkillBurst(ctx, pin, width, height, selected, hoveredId) {
     const tw = ctx.measureText(text).width;
     let tx = x1 + ux * pad;
     let ty = y1 + uy * pad;
-    tx = Math.max(margin + tw / 2, Math.min(width - margin - tw / 2, tx));
-    ty = Math.max(margin + 8, Math.min(height - margin - 8, ty));
+    tx = Math.max(margin + tw / 2, Math.min(viewW - margin - tw / 2, tx));
+    ty = Math.max(margin + 8, Math.min(viewH - margin - 8, ty));
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1363,11 +1361,6 @@ function drawFrame() {
     }
   });
 
-  const pinSkills = state.selectedId ? list.find((m) => m.entityId === state.selectedId) : null;
-  if (pinSkills) {
-    drawGalaxySkillBurst(ctx, pinSkills, width, height, selected, hoveredId);
-  }
-
   if (isGalaxyThemeFocus()) {
     ctx.save();
     ctx.textAlign = "center";
@@ -1552,6 +1545,75 @@ if (rosterCard) {
   });
 }
 
+function closeSkillsVizModal() {
+  if (!skillsVizModal) return;
+  skillsVizModal.hidden = true;
+  delete skillsVizModal.dataset.entityId;
+  document.body.style.overflow = "";
+}
+
+function paintSkillsVizModal(member) {
+  const wrap = document.querySelector(".skills-viz-canvas-wrap");
+  const canvas = skillsVizCanvas;
+  if (!wrap || !canvas || !member || wrap.hidden) return;
+  const raw = window.devicePixelRatio || 1;
+  const dpr = Math.min(2, raw);
+  const w = Math.max(320, Math.floor(wrap.clientWidth || 520));
+  const h = Math.min(440, Math.max(288, Math.floor(w * 0.62)));
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const mx = w / 2;
+  const my = h / 2;
+  const radGrad = ctx.createRadialGradient(mx, my, 0, mx, my, h * 0.58);
+  radGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+  radGrad.addColorStop(0.5, "rgba(248, 244, 253, 0.97)");
+  radGrad.addColorStop(1, "rgba(225, 214, 248, 0.55)");
+  ctx.fillStyle = radGrad;
+  ctx.fillRect(0, 0, w, h);
+  const r = 18;
+  ctx.beginPath();
+  ctx.fillStyle = member.color || "#7447f5";
+  ctx.shadowBlur = 26;
+  ctx.shadowColor = `${(member.color || "#7447f5")}88`;
+  ctx.arc(mx, my, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  const skills = memberSkillsList(member);
+  if (skills.length) drawSkillsBurstRadial(ctx, skills, mx, my, r, w, h);
+}
+
+function openSkillsVizModal(member) {
+  if (!skillsVizModal || !member) return;
+  const titleEl = document.getElementById("skills-viz-title");
+  const subEl = document.getElementById("skills-viz-sub");
+  const emptyEl = document.getElementById("skills-viz-empty");
+  const wrap = document.querySelector(".skills-viz-canvas-wrap");
+  if (titleEl) titleEl.textContent = member.name || "";
+  if (subEl) subEl.textContent = member.theme || "";
+  const skills = memberSkillsList(member);
+  if (emptyEl) emptyEl.hidden = skills.length > 0;
+  if (wrap) wrap.hidden = skills.length === 0;
+  skillsVizModal.dataset.entityId = member.entityId;
+  skillsVizModal.hidden = false;
+  document.body.style.overflow = "hidden";
+  requestAnimationFrame(() => paintSkillsVizModal(member));
+}
+
+if (skillsVizModal) {
+  skillsVizModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-skills-viz]")) closeSkillsVizModal();
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && skillsVizModal && !skillsVizModal.hidden) closeSkillsVizModal();
+});
+
 canvas.addEventListener("mousemove", (event) => {
   const member = pickMemberFromPointer(event);
   state.hoveredId = member?.entityId || null;
@@ -1569,6 +1631,7 @@ canvas.addEventListener("click", (event) => {
   state.selectedId = member.entityId;
   renderDetail(member);
   renderRoster(activeMembers());
+  openSkillsVizModal(member);
 });
 
 if (rosterGrid) {
@@ -1621,4 +1684,10 @@ if (detailCard) {
   });
 }
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", () => {
+  resizeCanvas();
+  if (skillsVizModal && !skillsVizModal.hidden && skillsVizModal.dataset.entityId) {
+    const m = members.find((x) => x.entityId === skillsVizModal.dataset.entityId);
+    if (m) paintSkillsVizModal(m);
+  }
+});
