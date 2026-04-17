@@ -431,34 +431,105 @@ function memberSkillsList(member) {
   return Array.isArray(member?.skills) ? member.skills.filter(Boolean) : [];
 }
 
+/** Parse #RRGGBB curator color → rgba() for tinted UI (falls back to violet). */
+function accentRgbParts(hex) {
+  const raw = String(hex || "").trim().replace(/^#/, "");
+  if (!/^[0-9a-f]{6}$/i.test(raw)) return { r: 116, g: 71, b: 245 };
+  const n = parseInt(raw, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function renderSocialIconButtons(member, btnClass) {
+  return (["x", "github", "linkedin"])
+    .map((key) => {
+      const rawHref = member.socialLinks?.[key];
+      if (!rawHref) return "";
+      const href = escapeHtml(ensureHttps(String(rawHref).trim()));
+      const title = platformLabels[key] || key;
+      const label = escapeHtml(`${title} (opens in a new tab)`);
+      return `<a class="${btnClass} ${btnClass}--${key}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${escapeHtml(title)}">${socialIcons[key]}</a>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 function renderDetailSkillsSection(member) {
   const skills = memberSkillsList(member);
   if (!skills.length) return "";
-  const tint = member.color || "#7447f5";
-  const chips = skills
-    .map((s) => `<span class="skill-chip" style="border-color:${tint}55">${escapeHtml(String(s))}</span>`)
-    .join("");
+  const { r, g, b } = accentRgbParts(member.color || "#7447f5");
+  const sep = '<span class="detail-skill-sep" aria-hidden="true">·</span>';
+  const prose = skills.map((s) => `<span class="detail-skill-item">${escapeHtml(String(s))}</span>`).join(sep);
   return `
-    <div class="detail-skills" aria-label="Skills from profile data">
-      <p class="detail-skills-label">Skills</p>
-      <div class="detail-skills-chips">${chips}</div>
-    </div>`;
+    <section class="detail-skills" aria-label="Skills" style="--detail-accent-r:${r};--detail-accent-g:${g};--detail-accent-b:${b}">
+      <h3 class="detail-section-title">Skills</h3>
+      <p class="detail-skills-prose">${prose}</p>
+    </section>`;
 }
 
-function renderRosterSkillsChips(member, maxVisible = 5) {
+function renderDetailConnect(member) {
+  const primary = normalizeSpaceUrl((member.spaces || []).find(Boolean) || "");
+  const socialHtml = renderSocialIconButtons(member, "detail-social-btn");
+  if (!primary && !socialHtml) return "";
+
+  const spaceBlock = primary
+    ? `<a class="detail-space-cta" href="${escapeHtml(primary)}" target="_blank" rel="noopener noreferrer" aria-label="Open personal Geo space (opens in a new tab)">
+        <span class="detail-space-cta-graphic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <circle cx="12" cy="12" r="3.2"></circle>
+            <path d="M12 2.5v4.3M12 17.2v4.3M2.5 12h4.3M17.2 12h4.3"></path>
+          </svg>
+        </span>
+        <span class="detail-space-cta-body">
+          <span class="detail-space-cta-kicker">Geo workspace</span>
+          <span class="detail-space-cta-title">Open personal space</span>
+        </span>
+        <span class="detail-space-cta-chev" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+        </span>
+      </a>`
+    : "";
+
+  const socialBlock = socialHtml
+    ? `<div class="detail-social-block">
+        <h3 class="detail-section-title">Social</h3>
+        <div class="detail-social-row">${socialHtml}</div>
+      </div>`
+    : "";
+
+  return `<section class="detail-connect" aria-label="Space and social links">
+    <div class="detail-connect-inner">${spaceBlock}${socialBlock}</div>
+  </section>`;
+}
+
+function renderRosterSkillsChips(member, maxWords = 10) {
   const skills = memberSkillsList(member);
   if (!skills.length) return "";
-  const tint = member.color || "#7447f5";
-  const shown = skills.slice(0, maxVisible);
+  const { r, g, b } = accentRgbParts(member.color || "#7447f5");
+  const shown = skills.slice(0, maxWords);
   const extra = skills.length - shown.length;
-  const chips = shown
-    .map((s) => `<span class="skill-chip skill-chip--compact" style="border-color:${tint}44">${escapeHtml(String(s))}</span>`)
-    .join("");
-  const more =
-    extra > 0
-      ? `<span class="skill-chip skill-chip--compact skill-chip--more" style="border-color:${tint}44">+${extra} more</span>`
-      : "";
-  return `<div class="roster-skills" aria-label="Skills">${chips}${more}</div>`;
+  const sep = '<span class="roster-skills-sep" aria-hidden="true">·</span>';
+  const body = shown.map((s) => escapeHtml(String(s))).join(sep);
+  const tail =
+    extra > 0 ? ` <span class="roster-skills-more" style="color:rgba(${r},${g},${b},0.82)">+${extra}</span>` : "";
+  return `<div class="roster-skills"><p class="roster-skills-line">${body}${tail}</p></div>`;
+}
+
+function renderRosterConnectRow(member) {
+  const primary = normalizeSpaceUrl((member.spaces || []).find(Boolean) || "");
+  const socialHtml = renderSocialIconButtons(member, "roster-social-btn");
+  if (!primary && !socialHtml) return "";
+
+  const space = primary
+    ? `<a class="roster-space-chip" href="${escapeHtml(primary)}" target="_blank" rel="noopener noreferrer" aria-label="Geo space (opens in a new tab)" title="Geo space">
+        <span class="roster-space-chip-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="15" height="15"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"></circle><circle cx="12" cy="12" r="3" fill="currentColor"></circle></svg>
+        </span>
+        <span>Space</span>
+      </a>`
+    : "";
+
+  return `<div class="roster-connect">${space}${socialHtml ? `<div class="roster-social-cluster">${socialHtml}</div>` : ""}</div>`;
 }
 
 function renderMarksSyncPanel() {
@@ -621,60 +692,6 @@ function relativeDensity(member) {
   if (member.description) return "detailed bio";
   if (member.spaceCount > 1) return "active across multiple spaces";
   return "light profile";
-}
-
-function renderSocialLinks(member, variant = "detail") {
-  const label = variant === "detail" ? "Social links" : "";
-  const items = [
-    ["x", "X"],
-    ["github", "GitHub"],
-    ["linkedin", "LinkedIn"],
-  ]
-    .map(([key, title]) => {
-      const directHref = member.socialLinks?.[key];
-      if (!directHref) return "";
-      const labelText = `${title} profile`;
-      return `
-        <a class="social-link is-active is-direct" href="${directHref}" aria-label="${labelText}" title="${labelText}">
-          ${socialIcons[key]}
-        </a>
-      `;
-    })
-    .filter(Boolean)
-    .join("");
-
-  if (!items) return "";
-
-  return `
-    <div class="social-block social-block-${variant}">
-      ${label ? `<p class="detail-meta">${label}</p>` : ""}
-      <div class="social-links">${items}</div>
-    </div>
-  `;
-}
-
-function renderSpaceLinks(member, variant = "detail") {
-  const primarySpace = (member.spaces || []).find(Boolean);
-  if (!primarySpace) return "";
-  const label = variant === "detail" ? "Personal space" : "";
-  const item = `
-    <a class="space-link" href="${primarySpace}" aria-label="Open personal Geo space">
-      <span class="space-link-logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="9"></circle>
-          <circle cx="12" cy="12" r="3.2"></circle>
-          <path d="M12 2.5v4.3M12 17.2v4.3M2.5 12h4.3M17.2 12h4.3"></path>
-        </svg>
-      </span>
-      <span class="space-link-title">Personal space</span>
-    </a>
-  `;
-  return `
-    <div class="space-block space-block-${variant}">
-      ${label ? `<p class="detail-meta">${label}</p>` : ""}
-      <div class="space-links">${item}</div>
-    </div>
-  `;
 }
 
 function activeMembers() {
@@ -969,8 +986,7 @@ function renderDetail(member) {
       </div>
     </div>
 
-    ${renderSpaceLinks(member, "detail")}
-    ${renderSocialLinks(member, "detail")}
+    ${renderDetailConnect(member)}
   `;
 }
 
@@ -1011,8 +1027,7 @@ function renderRoster(list) {
           </div>
           <p class="roster-description">${truncate(member.description, 175)}</p>
           ${renderRosterSkillsChips(member)}
-          ${renderSpaceLinks(member, "card")}
-          ${renderSocialLinks(member, "card")}
+          ${renderRosterConnectRow(member)}
         </article>
       `,
     )
