@@ -611,14 +611,35 @@ function readCanvasCssSize() {
 }
 
 function resizeCanvas() {
+  const { width: cssW, height: cssH } = readCanvasCssSize();
   const raw = window.devicePixelRatio || 1;
   const dpr = Math.min(3, Math.max(1, raw * 1.12));
-  const bounds = canvas.getBoundingClientRect();
-  const cssW = Math.max(1, bounds.width);
-  const cssH = Math.max(1, bounds.height);
   canvas.width = Math.max(1, Math.round(cssW * dpr));
   canvas.height = Math.max(1, Math.round(cssH * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/** When a single theme is shown, snap dots to Vogel targets so they are never stuck off-screen (bitmap/CSS size mismatch). */
+function snapSingleThemeVogelPositions(list) {
+  if (!list.length) return;
+  const { width, height } = readCanvasCssSize();
+  const anchors = anchorMap(list, width, height);
+  if (anchors.size !== 1) return;
+  const diskHalfW = Math.max(64, width * 0.5 - 40);
+  const diskHalfH = Math.max(64, height * 0.5 - 76);
+  const anchor = [...anchors.values()][0];
+  const n = Math.max(list.length, 1);
+  list.forEach((member, index) => {
+    const idx = index + 1;
+    const golden = idx * 2.39996322972865332;
+    const normR = Math.sqrt(idx / (n + 1));
+    const spin = state.phase * 0.1;
+    const t = golden + spin;
+    member.x = anchor.x + Math.cos(t) * normR * diskHalfW;
+    member.y = anchor.y + Math.sin(t) * normR * diskHalfH;
+    member.vx = 0;
+    member.vy = 0;
+  });
 }
 
 function drawFrame() {
@@ -768,8 +789,13 @@ function drawFrame() {
 
 function pickMemberFromPointer(event) {
   const bounds = canvas.getBoundingClientRect();
-  const x = event.clientX - bounds.left;
-  const y = event.clientY - bounds.top;
+  const { width: logicW, height: logicH } = readCanvasCssSize();
+  let x = event.clientX - bounds.left;
+  let y = event.clientY - bounds.top;
+  if (bounds.width >= 2 && bounds.height >= 2) {
+    x = (x / bounds.width) * logicW;
+    y = (y / bounds.height) * logicH;
+  }
   const list = activeMembers();
 
   let nearest = null;
@@ -807,6 +833,7 @@ function syncUI() {
   updateSummary(list);
   renderDetail(chosen);
   renderRoster(list);
+  snapSingleThemeVogelPositions(list);
 }
 
 buildThemePills();
@@ -823,6 +850,7 @@ requestAnimationFrame(drawFrame);
 if (canvasWrap && typeof ResizeObserver !== "undefined") {
   const ro = new ResizeObserver(() => {
     resizeCanvas();
+    snapSingleThemeVogelPositions(activeMembers());
   });
   ro.observe(canvasWrap);
 }
