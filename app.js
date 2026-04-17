@@ -711,10 +711,10 @@ function drawFrame() {
   });
   ctx.restore();
 
-  /** Soft follow; pull scales with fast-moving targets so dots keep up. */
-  const layoutPull = 0.038;
-  const layoutDamp = 0.91;
-  const angleDrift = performance.now() * 0.00072;
+  /** Same soft follow as "All" so category view stays alive, not glued to static Vogel targets. */
+  const layoutPull = 0.012;
+  const layoutDamp = 0.92;
+  const angleDrift = performance.now() * 0.00008;
 
   list.forEach((member, index) => {
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
@@ -727,8 +727,8 @@ function drawFrame() {
       const idx = index + 1;
       const golden = idx * 2.39996322972865332;
       const normR = Math.sqrt(idx / (n + 1));
-      const wobbleX = Math.sin(performance.now() * 0.0022 + member.seed * 3.9) * 10;
-      const wobbleY = Math.cos(performance.now() * 0.002 + member.seed * 2.7) * 10;
+      const wobbleX = Math.sin(performance.now() * 0.00028 + member.seed * 3.9) * 4;
+      const wobbleY = Math.cos(performance.now() * 0.00026 + member.seed * 2.7) * 4;
       const spin = state.phase * 0.1;
       const t = golden + spin + angleDrift;
       targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
@@ -803,7 +803,7 @@ function drawFrame() {
     }
   }
 
-  state.phase += 0.008;
+  state.phase += 0.0009;
   requestAnimationFrame(drawFrame);
 }
 
