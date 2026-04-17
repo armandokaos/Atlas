@@ -674,6 +674,67 @@ h1 {
   line-height: 1.75;
 }
 
+.skill-list {
+  display: grid;
+  gap: 8px;
+}
+
+.skill-list--detail {
+  margin-top: 4px;
+}
+
+.skill-list-heading {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9b87c4;
+}
+
+.skill-list-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.skill-list--card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  min-height: 0;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: #2f2a3d;
+  background: linear-gradient(135deg, rgba(116, 71, 245, 0.1), rgba(233, 88, 201, 0.08)), rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(165, 115, 241, 0.16);
+  box-shadow: 0 4px 14px rgba(116, 71, 245, 0.06);
+}
+
+.skill-chip--compact {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+}
+
+.skill-chip--more {
+  color: var(--muted);
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.75);
+  border-style: dashed;
+}
+
 .detail-meta {
   margin: 0;
   line-height: 1.6;
