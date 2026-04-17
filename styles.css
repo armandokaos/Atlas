@@ -826,6 +826,259 @@ h1 {
     rgba(255, 255, 255, 0.94);
 }
 
+.marker-filters {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(165, 115, 241, 0.12);
+}
+
+.marker-filters-inner {
+  display: grid;
+  gap: 10px;
+}
+
+.marker-filters-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9b87c4;
+}
+
+.marker-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.marker-filters-row--badges {
+  gap: 8px;
+}
+
+.marker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 115, 241, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 244, 253, 0.94));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.marker-chip:hover,
+.marker-chip.active {
+  transform: translateY(-1px);
+  border-color: rgba(116, 71, 245, 0.32);
+  box-shadow: 0 8px 22px rgba(116, 71, 245, 0.12);
+}
+
+.marker-chip.active {
+  background:
+    linear-gradient(135deg, rgba(116, 71, 245, 0.12), rgba(233, 88, 201, 0.1)),
+    rgba(255, 255, 255, 0.98);
+}
+
+.marker-chip-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.marker-chip--pastille {
+  padding: 0 10px 0 8px;
+  min-width: 52px;
+  justify-content: center;
+}
+
+.marker-chip--pastille .marker-chip-count {
+  margin-left: 2px;
+}
+
+.marker-pastille-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pastille, #94a3b8);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.marker-chip--none .marker-none-icon {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px dashed rgba(107, 94, 130, 0.45);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.roster-markers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(116, 71, 245, 0.04);
+  border: 1px solid rgba(165, 115, 241, 0.1);
+}
+
+.star-rail {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star-rail--compact {
+  gap: 0;
+}
+
+.star-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(55, 48, 75, 0.22);
+  transition: color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+
+.star-rail--compact .star-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.star-btn:hover {
+  color: rgba(202, 138, 4, 0.55);
+  background: rgba(255, 255, 255, 0.65);
+  transform: scale(1.06);
+}
+
+.star-btn.is-lit {
+  color: #d4a017;
+  text-shadow: 0 0 12px rgba(255, 193, 59, 0.35);
+}
+
+.star-shape {
+  display: block;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.star-shape::before {
+  content: "★";
+}
+
+.pastille-rail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pastille-rail--compact {
+  gap: 4px;
+}
+
+.pastille-dot {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 140ms ease, box-shadow 140ms ease, outline 140ms ease;
+}
+
+.pastille-rail--compact .pastille-dot {
+  width: 18px;
+  height: 18px;
+}
+
+.pastille-dot:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.pastille-dot.is-on {
+  outline: 2px solid rgba(38, 37, 45, 0.55);
+  outline-offset: 2px;
+}
+
+.pastille-dot--clear {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 236, 248, 0.98));
+  border: 2px dashed rgba(107, 94, 130, 0.4);
+}
+
+.pastille-dot--blue {
+  background: #2563eb;
+}
+
+.pastille-dot--green {
+  background: #16a34a;
+}
+
+.pastille-dot--red {
+  background: #dc2626;
+}
+
+.pastille-dot--yellow {
+  background: #eab308;
+}
+
+.detail-markers {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(165, 115, 241, 0.12);
+  background: linear-gradient(135deg, rgba(116, 71, 245, 0.06), rgba(233, 88, 201, 0.05)), rgba(255, 255, 255, 0.55);
+}
+
+.detail-markers-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9b87c4;
+  margin: 0 0 10px;
+}
+
+.detail-markers-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+}
+
+.detail-markers-hint {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.roster-item.is-selected {
+  border-color: rgba(116, 71, 245, 0.42);
+  box-shadow:
+    0 22px 56px rgba(116, 71, 245, 0.16),
+    0 0 0 1px rgba(116, 71, 245, 0.08);
+}
+
 @keyframes driftGlow {
   0% {
     transform: translate3d(-2%, 0%, 0) scale(1);

@@ -232,10 +232,77 @@ const state = {
   theme: "all",
   rosterFilter: "all",
   rosterPage: 1,
+  starFilter: "all",
+  badgeFilter: "all",
   hoveredId: null,
   selectedId: demoMember?.entityId || null,
   phase: 0,
 };
+
+const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
+const BADGE_KEYS = ["blue", "green", "red", "yellow"];
+const BADGE_META = {
+  blue: { label: "Blue", hex: "#2563eb" },
+  green: { label: "Green", hex: "#16a34a" },
+  red: { label: "Red", hex: "#dc2626" },
+  yellow: { label: "Yellow", hex: "#ca8a04" },
+};
+
+const personalMarks = { ratings: {}, badges: {} };
+
+function loadPersonalMarks() {
+  try {
+    const raw = localStorage.getItem(PERSONAL_STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return;
+    if (data.ratings && typeof data.ratings === "object") personalMarks.ratings = { ...data.ratings };
+    if (data.badges && typeof data.badges === "object") personalMarks.badges = { ...data.badges };
+  } catch {
+    /* ignore corrupt storage */
+  }
+}
+
+function savePersonalMarks() {
+  try {
+    localStorage.setItem(
+      PERSONAL_STORAGE_KEY,
+      JSON.stringify({ v: 1, ratings: personalMarks.ratings, badges: personalMarks.badges }),
+    );
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+function getPersonalRating(entityId) {
+  const r = personalMarks.ratings[entityId];
+  return typeof r === "number" && r >= 1 && r <= 5 ? r : 0;
+}
+
+function getPersonalBadge(entityId) {
+  const b = personalMarks.badges[entityId];
+  return BADGE_KEYS.includes(b) ? b : null;
+}
+
+function setPersonalRating(entityId, value) {
+  const cur = getPersonalRating(entityId);
+  if (cur === value) {
+    delete personalMarks.ratings[entityId];
+  } else if (value >= 1 && value <= 5) {
+    personalMarks.ratings[entityId] = value;
+  }
+  savePersonalMarks();
+}
+
+function setPersonalBadge(entityId, key) {
+  if (key === "clear" || key === "") {
+    delete personalMarks.badges[entityId];
+  } else if (BADGE_KEYS.includes(key)) {
+    if (personalMarks.badges[entityId] === key) delete personalMarks.badges[entityId];
+    else personalMarks.badges[entityId] = key;
+  }
+  savePersonalMarks();
+}
 
 const __galaxyThemeForReset = { theme: state.theme };
 
@@ -252,8 +319,11 @@ const rosterGrid = document.querySelector("#roster-grid");
 const rosterPagination = document.querySelector("#roster-pagination");
 const rosterListShell = document.querySelector("#roster-list-shell");
 const spotlightFilters = document.querySelector("#spotlight-filters");
+const markerFilters = document.querySelector("#marker-filters");
 const detailPanel = document.querySelector("#detail-panel");
+const detailCard = document.querySelector(".detail-card");
 const selectionSummary = document.querySelector("#selection-summary");
+const rosterCard = document.querySelector(".roster-card");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -336,9 +406,31 @@ function activeMembers() {
   });
 }
 
+function applyPersonalFilters(list) {
+  const { starFilter, badgeFilter } = state;
+  return list.filter((m) => {
+    const r = getPersonalRating(m.entityId);
+    const b = getPersonalBadge(m.entityId);
+    if (starFilter === "unrated") {
+      if (r !== 0) return false;
+    } else if (starFilter !== "all") {
+      const min = Number(starFilter);
+      if (!Number.isFinite(min) || r < min) return false;
+    }
+    if (badgeFilter === "all") return true;
+    if (badgeFilter === "none") return !b;
+    return b === badgeFilter;
+  });
+}
+
+function visibleMembers() {
+  return applyPersonalFilters(spotlightMembers(activeMembers()));
+}
+
 function selectedMember(list = members) {
+  if (!list.length) return null;
   const found = list.find((member) => member.entityId === state.selectedId);
-  return found || list[0] || members[0];
+  return found || list[0];
 }
 
 function rosterFilterItems(list) {
@@ -369,7 +461,7 @@ function hasFullDisplayName(name) {
 }
 
 function sortedSpotlightMembers(list) {
-  return [...spotlightMembers(list)].sort((a, b) => {
+  return [...applyPersonalFilters(spotlightMembers(list))].sort((a, b) => {
     const pinA = rosterPinOrderIndex(a.name);
     const pinB = rosterPinOrderIndex(b.name);
     if (pinA !== pinB) return pinA - pinB;
@@ -453,6 +545,116 @@ function buildThemePills() {
   renderThemePillsInto(spotlightThemeStrip, true);
 }
 
+function renderStarRow(entityId, compact) {
+  const r = getPersonalRating(entityId);
+  const mod = compact ? " star-rail--compact" : "";
+  const stars = [1, 2, 3, 4, 5]
+    .map(
+      (i) => `
+    <button type="button" class="star-btn${i <= r ? " is-lit" : ""}" data-star="${i}" aria-label="${i} out of 5 stars">
+      <span class="star-shape" aria-hidden="true"></span>
+    </button>`,
+    )
+    .join("");
+  return `<div class="star-rail${mod}">${stars}</div>`;
+}
+
+function renderPastilleRow(entityId, compact) {
+  const current = getPersonalBadge(entityId);
+  const mod = compact ? " pastille-rail--compact" : "";
+  const dots = BADGE_KEYS.map(
+    (k) => `
+    <button type="button" class="pastille-dot pastille-dot--${k}${current === k ? " is-on" : ""}" data-pastille="${k}" aria-label="${BADGE_META[k].label} tag" title="${BADGE_META[k].label}"></button>`,
+  ).join("");
+  const noneOn = !current;
+  return `
+    <div class="pastille-rail${mod}" role="group" aria-label="Color tag">
+      <button type="button" class="pastille-dot pastille-dot--clear${noneOn ? " is-on" : ""}" data-pastille="clear" aria-label="No color tag" title="None"></button>
+      ${dots}
+    </div>`;
+}
+
+function renderMarkerFilters(baseList) {
+  if (!markerFilters) return;
+  const scope = spotlightMembers(baseList);
+  const n = scope.length;
+  const starCounts = {
+    all: n,
+    unrated: scope.filter((m) => getPersonalRating(m.entityId) === 0).length,
+    5: scope.filter((m) => getPersonalRating(m.entityId) >= 5).length,
+    4: scope.filter((m) => getPersonalRating(m.entityId) >= 4).length,
+    3: scope.filter((m) => getPersonalRating(m.entityId) >= 3).length,
+    2: scope.filter((m) => getPersonalRating(m.entityId) >= 2).length,
+    1: scope.filter((m) => getPersonalRating(m.entityId) >= 1).length,
+  };
+  const badgeCounts = {
+    all: n,
+    none: scope.filter((m) => !getPersonalBadge(m.entityId)).length,
+    blue: scope.filter((m) => getPersonalBadge(m.entityId) === "blue").length,
+    green: scope.filter((m) => getPersonalBadge(m.entityId) === "green").length,
+    red: scope.filter((m) => getPersonalBadge(m.entityId) === "red").length,
+    yellow: scope.filter((m) => getPersonalBadge(m.entityId) === "yellow").length,
+  };
+  const sf = state.starFilter;
+  const bf = state.badgeFilter;
+  const starRow = [
+    ["all", "Any", starCounts.all],
+    ["unrated", "Unrated", starCounts.unrated],
+    ["5", "5 ★", starCounts[5]],
+    ["4", "4+ ★", starCounts[4]],
+    ["3", "3+ ★", starCounts[3]],
+    ["2", "2+ ★", starCounts[2]],
+    ["1", "1+ ★", starCounts[1]],
+  ]
+    .map(
+      ([key, label, count]) => `
+      <button type="button" class="marker-chip ${sf === key ? "active" : ""}" data-marker-star-filter="${key}">
+        <span>${label}</span>
+        <span class="marker-chip-count">${formatNumber(count)}</span>
+      </button>`,
+    )
+    .join("");
+  const badgeRow = [
+    ["all", "Any tag", null, true],
+    ["none", "None", null, false],
+    ["blue", "", "blue", false],
+    ["green", "", "green", false],
+    ["red", "", "red", false],
+    ["yellow", "", "yellow", false],
+  ]
+    .map(([key, label, colorKey, isText]) => {
+      const count = badgeCounts[key];
+      const active = bf === key;
+      if (isText) {
+        return `
+      <button type="button" class="marker-chip ${active ? "active" : ""}" data-marker-badge-filter="${key}">
+        <span>${label}</span>
+        <span class="marker-chip-count">${formatNumber(count)}</span>
+      </button>`;
+      }
+      if (key === "none") {
+        return `
+      <button type="button" class="marker-chip marker-chip--pastille marker-chip--none ${active ? "active" : ""}" data-marker-badge-filter="none" aria-label="No tag" title="No tag">
+        <span class="marker-none-icon" aria-hidden="true"></span>
+        <span class="marker-chip-count">${formatNumber(count)}</span>
+      </button>`;
+      }
+      const meta = BADGE_META[colorKey];
+      return `
+      <button type="button" class="marker-chip marker-chip--pastille ${active ? "active" : ""}" data-marker-badge-filter="${key}" style="--pastille:${meta.hex}" aria-label="${meta.label}" title="${meta.label}">
+        <span class="marker-pastille-swatch" aria-hidden="true"></span>
+        <span class="marker-chip-count">${formatNumber(count)}</span>
+      </button>`;
+    })
+    .join("");
+  markerFilters.innerHTML = `
+    <div class="marker-filters-inner">
+      <p class="marker-filters-label">Your marks</p>
+      <div class="marker-filters-row" role="toolbar" aria-label="Filter by star rating">${starRow}</div>
+      <div class="marker-filters-row marker-filters-row--badges" role="toolbar" aria-label="Filter by color tag">${badgeRow}</div>
+    </div>`;
+}
+
 function renderDetail(member) {
   if (!member) {
     detailPanel.innerHTML = `<div class="empty-state">No profiles match the current filters.</div>`;
@@ -472,6 +674,14 @@ function renderDetail(member) {
       </div>
       <h2 class="detail-name">${member.name}</h2>
       <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
+      <div class="detail-markers" data-entity-id="${member.entityId}">
+        <div class="detail-markers-label">Your rating and tag</div>
+        <div class="detail-markers-controls">
+          ${renderStarRow(member.entityId, false)}
+          ${renderPastilleRow(member.entityId, false)}
+        </div>
+        <p class="detail-markers-hint">Saved on this device only.</p>
+      </div>
         </div>
       </div>
     </div>
@@ -486,7 +696,7 @@ function renderRoster(list) {
   const total = sorted.length;
 
   if (!total) {
-    rosterGrid.innerHTML = `<div class="empty-state">No spotlight cards for this filter yet. Try another theme or a broader keyword.</div>`;
+    rosterGrid.innerHTML = `<div class="empty-state">No profiles match these filters. Try another category, search, link filter, or relax your star and tag filters.</div>`;
     rosterPagination.innerHTML = "";
     return;
   }
@@ -502,7 +712,7 @@ function renderRoster(list) {
   rosterGrid.innerHTML = pageItems
     .map(
       (member) => `
-        <article class="roster-item" data-entity-id="${member.entityId}">
+        <article class="roster-item${member.entityId === state.selectedId ? " is-selected" : ""}" data-entity-id="${member.entityId}">
           <div class="roster-top">
             <div>
               <p class="roster-name">${member.name}</p>
@@ -511,6 +721,10 @@ function renderRoster(list) {
             <div class="roster-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
               ${renderAvatar(member, "avatar-small")}
             </div>
+          </div>
+          <div class="roster-markers">
+            ${renderStarRow(member.entityId, true)}
+            ${renderPastilleRow(member.entityId, true)}
           </div>
           <p class="roster-description">${truncate(member.description, 175)}</p>
           ${renderSpaceLinks(member, "card")}
@@ -575,10 +789,18 @@ function truncateGalaxyLabel(name, max = 20) {
 function updateSummary(list) {
   const count = list.length;
   const activeTheme = state.theme === "all" ? "all themes" : state.theme;
-  selectionSummary.textContent =
-    count === members.length && !state.query
-      ? `${formatNumber(count)} curator profiles with bios, grouped by shared themes.`
-      : `${formatNumber(count)} curator profiles match "${activeTheme}"${state.query ? ` and "${state.query}"` : ""}.`;
+  const marks =
+    state.starFilter !== "all" || state.badgeFilter !== "all"
+      ? ", with your star and tag filters applied"
+      : "";
+  const defaultBlurb =
+    state.starFilter === "all" &&
+    state.badgeFilter === "all" &&
+    count === members.length &&
+    !state.query;
+  selectionSummary.textContent = defaultBlurb
+    ? `${formatNumber(count)} curator profiles with bios, grouped by shared themes.`
+    : `${formatNumber(count)} curator profiles match "${activeTheme}"${state.query ? ` and "${state.query}"` : ""}${marks}.`;
 }
 
 function anchorMap(list, width, height) {
@@ -662,7 +884,7 @@ function snapSingleThemeVogelPositions(list) {
 function drawFrame() {
   resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
-  const list = activeMembers();
+  const list = visibleMembers();
   const selected = selectedMember(list);
   const hoveredId = state.hoveredId;
   const anchors = anchorMap(list, width, height);
@@ -762,6 +984,17 @@ function drawFrame() {
     ctx.fill();
     ctx.shadowBlur = 0;
 
+    const tag = getPersonalBadge(member.entityId);
+    if (tag) {
+      ctx.beginPath();
+      ctx.strokeStyle = BADGE_META[tag].hex;
+      ctx.globalAlpha = 0.88;
+      ctx.lineWidth = 1.65;
+      ctx.arc(member.x, member.y, radius + 3.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     if (highlighted) {
       ctx.beginPath();
       ctx.strokeStyle = `${member.color}77`;
@@ -816,7 +1049,7 @@ function pickMemberFromPointer(event) {
     x = (x / bounds.width) * logicW;
     y = (y / bounds.height) * logicH;
   }
-  const list = activeMembers();
+  const list = visibleMembers();
 
   let nearest = null;
   let nearestDistance = Infinity;
@@ -834,6 +1067,21 @@ function pickMemberFromPointer(event) {
   return nearest;
 }
 
+function refreshSpotlightUI({ rebuildThemes = false } = {}) {
+  const base = activeMembers();
+  if (rebuildThemes) buildThemePills();
+  renderSpotlightFilters(base);
+  renderMarkerFilters(base);
+  const vis = visibleMembers();
+  const chosen = selectedMember(vis);
+  if (chosen) state.selectedId = chosen.entityId;
+  else state.selectedId = null;
+  updateSummary(vis);
+  renderDetail(chosen);
+  renderRoster(base);
+  snapSingleThemeVogelPositions(vis);
+}
+
 function syncUI() {
   if (__galaxyThemeForReset.theme !== state.theme) {
     __galaxyThemeForReset.theme = state.theme;
@@ -845,18 +1093,10 @@ function syncUI() {
     });
   }
   state.rosterPage = 1;
-  const list = activeMembers();
-  const chosen = selectedMember(list);
-  if (chosen) state.selectedId = chosen.entityId;
-  buildThemePills();
-  renderSpotlightFilters(list);
-  updateSummary(list);
-  renderDetail(chosen);
-  renderRoster(list);
-  snapSingleThemeVogelPositions(list);
+  refreshSpotlightUI({ rebuildThemes: true });
 }
 
-buildThemePills();
+loadPersonalMarks();
 resizeCanvas();
 syncUI();
 requestAnimationFrame(() => {
@@ -870,14 +1110,14 @@ requestAnimationFrame(drawFrame);
 if (canvasWrap && typeof ResizeObserver !== "undefined") {
   const ro = new ResizeObserver(() => {
     resizeCanvas();
-    snapSingleThemeVogelPositions(activeMembers());
+    snapSingleThemeVogelPositions(visibleMembers());
   });
   ro.observe(canvasWrap);
 }
 
 window.addEventListener("load", () => {
   resizeCanvas();
-  snapSingleThemeVogelPositions(activeMembers());
+  snapSingleThemeVogelPositions(visibleMembers());
 });
 
 searchInput.addEventListener("input", (event) => {
@@ -897,32 +1137,53 @@ if (spotlightThemeStrip) {
   spotlightThemeStrip.addEventListener("click", onThemePillClick);
 }
 
-spotlightFilters.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-roster-filter]");
-  if (!button) return;
-  state.rosterFilter = button.dataset.rosterFilter;
-  state.rosterPage = 1;
-  renderSpotlightFilters(activeMembers());
-  renderRoster(activeMembers());
-});
+if (spotlightFilters) {
+  spotlightFilters.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-roster-filter]");
+    if (!button) return;
+    state.rosterFilter = button.dataset.rosterFilter;
+    state.rosterPage = 1;
+    refreshSpotlightUI();
+  });
+}
 
-document.querySelector(".roster-card").addEventListener("click", (event) => {
-  const nav = event.target.closest("[data-roster-nav]");
-  if (!nav || nav.disabled) return;
-  const list = activeMembers();
-  const sorted = sortedSpotlightMembers(list);
-  const total = sorted.length;
-  const totalPages = Math.max(1, Math.ceil(total / ROSTER_PAGE_SIZE));
-  if (nav.dataset.rosterNav === "prev" && state.rosterPage > 1) {
-    state.rosterPage -= 1;
-    renderRoster(list);
-    rosterListShell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  } else if (nav.dataset.rosterNav === "next" && state.rosterPage < totalPages) {
-    state.rosterPage += 1;
-    renderRoster(list);
-    rosterListShell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-});
+if (markerFilters) {
+  markerFilters.addEventListener("click", (event) => {
+    const starChip = event.target.closest("[data-marker-star-filter]");
+    if (starChip) {
+      state.starFilter = starChip.dataset.markerStarFilter;
+      state.rosterPage = 1;
+      refreshSpotlightUI();
+      return;
+    }
+    const badgeChip = event.target.closest("[data-marker-badge-filter]");
+    if (badgeChip) {
+      state.badgeFilter = badgeChip.dataset.markerBadgeFilter;
+      state.rosterPage = 1;
+      refreshSpotlightUI();
+    }
+  });
+}
+
+if (rosterCard) {
+  rosterCard.addEventListener("click", (event) => {
+    const nav = event.target.closest("[data-roster-nav]");
+    if (!nav || nav.disabled) return;
+    const list = activeMembers();
+    const sorted = sortedSpotlightMembers(list);
+    const total = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(total / ROSTER_PAGE_SIZE));
+    if (nav.dataset.rosterNav === "prev" && state.rosterPage > 1) {
+      state.rosterPage -= 1;
+      renderRoster(list);
+      rosterListShell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else if (nav.dataset.rosterNav === "next" && state.rosterPage < totalPages) {
+      state.rosterPage += 1;
+      renderRoster(list);
+      rosterListShell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  });
+}
 
 canvas.addEventListener("mousemove", (event) => {
   const member = pickMemberFromPointer(event);
@@ -943,12 +1204,54 @@ canvas.addEventListener("click", (event) => {
   renderRoster(activeMembers());
 });
 
-rosterGrid.addEventListener("click", (event) => {
-  if (event.target.closest("a")) return;
-  const card = event.target.closest("[data-entity-id]");
-  if (!card) return;
-  state.selectedId = card.dataset.entityId;
-  renderDetail(selectedMember(activeMembers()));
-});
+if (rosterGrid) {
+  rosterGrid.addEventListener("click", (event) => {
+    const starBtn = event.target.closest("[data-star]");
+    if (starBtn) {
+      const card = starBtn.closest("[data-entity-id]");
+      if (card) {
+        setPersonalRating(card.dataset.entityId, Number(starBtn.dataset.star));
+        refreshSpotlightUI();
+      }
+      event.stopPropagation();
+      return;
+    }
+    const pastBtn = event.target.closest("[data-pastille]");
+    if (pastBtn) {
+      const card = pastBtn.closest("[data-entity-id]");
+      if (card) {
+        setPersonalBadge(card.dataset.entityId, pastBtn.dataset.pastille);
+        refreshSpotlightUI();
+      }
+      event.stopPropagation();
+      return;
+    }
+    if (event.target.closest("a")) return;
+    const card = event.target.closest("[data-entity-id]");
+    if (!card) return;
+    state.selectedId = card.dataset.entityId;
+    renderDetail(selectedMember(visibleMembers()));
+    renderRoster(activeMembers());
+  });
+}
+
+if (detailCard) {
+  detailCard.addEventListener("click", (event) => {
+    const wrap = event.target.closest(".detail-markers");
+    if (!wrap) return;
+    const id = wrap.dataset.entityId;
+    const starBtn = event.target.closest("[data-star]");
+    if (starBtn && id) {
+      setPersonalRating(id, Number(starBtn.dataset.star));
+      refreshSpotlightUI();
+      return;
+    }
+    const pastBtn = event.target.closest("[data-pastille]");
+    if (pastBtn && id) {
+      setPersonalBadge(id, pastBtn.dataset.pastille);
+      refreshSpotlightUI();
+    }
+  });
+}
 
 window.addEventListener("resize", resizeCanvas);
