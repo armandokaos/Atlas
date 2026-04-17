@@ -1,0 +1,650 @@
+const palette = {
+  "Geo Builders": "#F97316",
+  "Research & Science": "#06B6D4",
+  "Crypto & Web3": "#A855F7",
+  "Writing & Content": "#F43F5E",
+  "Design & Product": "#14B8A6",
+  "Engineering & AI": "#84CC16",
+  "Community & Education": "#FACC15",
+  "Business & Strategy": "#38BDF8",
+  Generalists: "#94A3B8",
+};
+
+const BOSS_NAME = "Yaniv Tal";
+const BOSS_COLOR = "#FFD84D";
+
+const data = window.GEO_CURATORS_DATA;
+const socialIcons = {
+  x: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18.9 2H22l-6.77 7.74L23.2 22h-6.27l-4.9-7.45L5.5 22H2.4l7.24-8.28L1.8 2h6.43l4.42 6.77L18.9 2Z"></path>
+    </svg>
+  `,
+  github: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.4.7-4.1-1.4-4.1-1.4-.6-1.3-1.3-1.6-1.3-1.6-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1.1 1.9 2.9 1.4 3.6 1.1.1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6a4.7 4.7 0 0 1 1.2-3.2 4.3 4.3 0 0 1 .1-3.1s1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.5 1.1.4 2.4.1 3.1a4.7 4.7 0 0 1 1.2 3.2c0 4.7-2.9 5.7-5.6 6 .4.3.8 1 .8 2.1v3.1c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"></path>
+    </svg>
+  `,
+  linkedin: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.98 3.5A2.48 2.48 0 1 1 5 8.46a2.48 2.48 0 0 1-.02-4.96ZM2.8 9.5h4.4V21H2.8V9.5Zm7 0h4.2v1.57h.06c.58-1.1 2-2.27 4.13-2.27 4.42 0 5.24 2.9 5.24 6.67V21H19V16c0-1.2-.02-2.75-1.67-2.75-1.67 0-1.93 1.3-1.93 2.66V21H10V9.5Z"></path>
+    </svg>
+  `,
+};
+
+const platformLabels = {
+  x: "X",
+  github: "GitHub",
+  linkedin: "LinkedIn",
+};
+
+function ensureHttps(value) {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+}
+
+function looksUnavailable(value) {
+  const normalized = (value || "").trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "nil" ||
+    normalized === "-" ||
+    normalized === "---" ||
+    normalized === "n/a" ||
+    normalized === "na" ||
+    normalized === "none" ||
+    normalized === "1" ||
+    normalized === "null" ||
+    normalized === "undefined" ||
+    normalized === "false" ||
+    normalized === "no" ||
+    normalized === "nope" ||
+    normalized === "not available" ||
+    normalized === "not provided" ||
+    normalized.includes("i dont have")
+  );
+}
+
+function normalizeSpaceUrl(value) {
+  const candidate = ensureHttps((value || "").trim());
+  if (!candidate) return "";
+  try {
+    const url = new URL(candidate);
+    const validHost = url.hostname === "www.geobrowser.io" || url.hostname === "geobrowser.io";
+    const validPath = /^\/space\/[0-9a-f]+$/i.test(url.pathname);
+    return validHost && validPath ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeXUrl(value) {
+  if (looksUnavailable(value)) return "";
+  let candidate = (value || "").trim();
+  if (/^(?:www\.)?(?:x|twitter)\.com\//i.test(candidate)) {
+    candidate = ensureHttps(candidate);
+  }
+  try {
+    const url = new URL(candidate);
+    const validHost =
+      url.hostname === "x.com" ||
+      url.hostname === "www.x.com" ||
+      url.hostname === "twitter.com" ||
+      url.hostname === "www.twitter.com";
+    const validPath = /^\/[A-Za-z0-9_]+(?:\/.*)?$/.test(url.pathname);
+    return validHost && validPath ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeGithubUrl(value) {
+  if (looksUnavailable(value)) return "";
+  let candidate = (value || "").trim();
+  if (/^(?:www\.)?github\.com\//i.test(candidate)) {
+    candidate = ensureHttps(candidate);
+  }
+  try {
+    const url = new URL(candidate);
+    const validHost = url.hostname === "github.com" || url.hostname === "www.github.com";
+    const validPath = /^\/[A-Za-z0-9_.-]+(?:\/.*)?$/.test(url.pathname) && url.pathname !== "/";
+    return validHost && validPath ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeLinkedinUrl(value) {
+  if (looksUnavailable(value)) return "";
+  let candidate = (value || "").trim();
+  if (/^(?:[a-z]{2,3}\.)?linkedin\.com\//i.test(candidate) || /^www\.linkedin\.com\//i.test(candidate)) {
+    candidate = ensureHttps(candidate);
+  }
+  try {
+    const url = new URL(candidate);
+    const validHost =
+      url.hostname === "linkedin.com" ||
+      url.hostname === "www.linkedin.com" ||
+      /^[a-z]{2,3}\.linkedin\.com$/i.test(url.hostname);
+    const validPath = url.pathname.startsWith("/in/") || url.pathname.startsWith("/company/");
+    return validHost && validPath ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function renderAvatar(member, sizeClass = "") {
+  if (member.avatarUrl) {
+    return `<img class="avatar-image ${sizeClass}" src="${member.avatarUrl}" alt="${member.name}" loading="lazy" />`;
+  }
+  return `<span class="avatar-fallback ${sizeClass}">${member.initials}</span>`;
+}
+
+const members = data.members
+  .filter((member) => member.description && member.description.trim())
+  .filter((member) => member.avatarUrl && member.avatarUrl.trim())
+  .map((member, index) => {
+    const spaces = (member.spaces || []).map(normalizeSpaceUrl).filter(Boolean);
+    const spaceCount = spaces.length;
+    return {
+      isBoss: member.name === BOSS_NAME,
+      ...member,
+      spaces,
+      spaceCount,
+      socialLinks: {
+        x: normalizeXUrl(member.socialLinks?.x || ""),
+        github: normalizeGithubUrl(member.socialLinks?.github || ""),
+        linkedin: normalizeLinkedinUrl(member.socialLinks?.linkedin || ""),
+      },
+      color: member.name === BOSS_NAME ? BOSS_COLOR : palette[member.theme] || member.color || "#94A3B8",
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      radius: 2.5 + Math.min(8, spaceCount * 0.9 + member.descLength / 120),
+      seed: index * 0.37,
+    };
+  });
+
+const themeCounts = members.reduce((acc, member) => {
+  acc[member.theme] = (acc[member.theme] || 0) + 1;
+  return acc;
+}, {});
+
+const memberSummary = {
+  totalMembers: members.length,
+  uniqueSpaces: new Set(members.flatMap((member) => member.spaces)).size,
+  latestUpdate:
+    members
+      .map((member) => member.updatedLabel)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || data.summary.latestUpdate || "",
+  themeCounts: Object.fromEntries(
+    Object.entries(themeCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+  ),
+};
+
+const bossMember = members.find((member) => member.isBoss) || null;
+const spotlightPriority = new Map([
+  ["Rushab Taneja", 5],
+  ["Yaniv Tal", 4],
+  ["Preston Mantel", 3],
+  ["Federico Sendra", 2],
+  ["MaximVL", 1],
+  ["Dan3", -1],
+  ["Joueurs", -2],
+]);
+const demoMember = members.find((member) => member.name === "Preston Mantel") || bossMember || members[0] || null;
+
+const state = {
+  query: "",
+  theme: "all",
+  rosterFilter: "all",
+  hoveredId: null,
+  selectedId: demoMember?.entityId || null,
+  phase: 0,
+};
+
+const canvas = document.querySelector("#galaxy-canvas");
+const ctx = canvas.getContext("2d");
+const searchInput = document.querySelector("#search-input");
+const themePills = document.querySelector("#theme-pills");
+const rosterGrid = document.querySelector("#roster-grid");
+const spotlightFilters = document.querySelector("#spotlight-filters");
+const detailPanel = document.querySelector("#detail-panel");
+const selectionSummary = document.querySelector("#selection-summary");
+const shuffleButton = document.querySelector("#shuffle-button");
+
+function formatNumber(value) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function truncate(text, max = 150) {
+  if (!text) return "No bio available yet.";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trim()}...`;
+}
+
+function relativeDensity(member) {
+  if (member.description && member.spaceCount > 1) return "highly connected profile";
+  if (member.description) return "detailed bio";
+  if (member.spaceCount > 1) return "active across multiple spaces";
+  return "light profile";
+}
+
+function renderSocialLinks(member, variant = "detail") {
+  const label = variant === "detail" ? "Social links" : "";
+  const items = [
+    ["x", "X"],
+    ["github", "GitHub"],
+    ["linkedin", "LinkedIn"],
+  ]
+    .map(([key, title]) => {
+      const directHref = member.socialLinks?.[key];
+      if (!directHref) return "";
+      const labelText = `${title} profile`;
+      return `
+        <a class="social-link is-active is-direct" href="${directHref}" aria-label="${labelText}" title="${labelText}">
+          ${socialIcons[key]}
+        </a>
+      `;
+    })
+    .filter(Boolean)
+    .join("");
+
+  if (!items) return "";
+
+  return `
+    <div class="social-block social-block-${variant}">
+      ${label ? `<p class="detail-meta">${label}</p>` : ""}
+      <div class="social-links">${items}</div>
+    </div>
+  `;
+}
+
+function renderSpaceLinks(member, variant = "detail") {
+  const primarySpace = (member.spaces || []).find(Boolean);
+  if (!primarySpace) return "";
+  const label = variant === "detail" ? "Personal space" : "";
+  const item = `
+    <a class="space-link" href="${primarySpace}" aria-label="Open personal Geo space">
+      <span class="space-link-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9"></circle>
+          <circle cx="12" cy="12" r="3.2"></circle>
+          <path d="M12 2.5v4.3M12 17.2v4.3M2.5 12h4.3M17.2 12h4.3"></path>
+        </svg>
+      </span>
+      <span class="space-link-title">Personal space</span>
+    </a>
+  `;
+  return `
+    <div class="space-block space-block-${variant}">
+      ${label ? `<p class="detail-meta">${label}</p>` : ""}
+      <div class="space-links">${item}</div>
+    </div>
+  `;
+}
+
+function activeMembers() {
+  const query = state.query.trim().toLowerCase();
+  return members.filter((member) => {
+    const matchTheme = state.theme === "all" || member.theme === state.theme;
+    const haystack = `${member.name} ${member.description} ${member.theme}`.toLowerCase();
+    const matchQuery = !query || haystack.includes(query);
+    return matchTheme && matchQuery;
+  });
+}
+
+function selectedMember(list = members) {
+  const found = list.find((member) => member.entityId === state.selectedId);
+  return found || list[0] || members[0];
+}
+
+function rosterFilterItems(list) {
+  return [
+    { key: "all", label: "All", count: list.length },
+    { key: "x", label: "X", count: list.filter((member) => member.socialLinks?.x).length },
+    { key: "github", label: "GitHub", count: list.filter((member) => member.socialLinks?.github).length },
+    { key: "linkedin", label: "LinkedIn", count: list.filter((member) => member.socialLinks?.linkedin).length },
+  ];
+}
+
+function spotlightMembers(list) {
+  if (state.rosterFilter === "all") return list;
+  return list.filter((member) => member.socialLinks?.[state.rosterFilter]);
+}
+
+function renderSpotlightFilters(list) {
+  const items = rosterFilterItems(list);
+  const activeItem = items.find((item) => item.key === state.rosterFilter && item.count > 0);
+  if (!activeItem) {
+    state.rosterFilter = "all";
+  }
+
+  spotlightFilters.innerHTML = items
+    .map(
+      (item) => `
+        <button
+          class="spotlight-filter ${state.rosterFilter === item.key ? "active" : ""}"
+          data-roster-filter="${item.key}"
+          type="button"
+        >
+          <span>${item.label}</span>
+          <span class="spotlight-filter-count">${formatNumber(item.count)}</span>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function buildThemePills() {
+  const counts = memberSummary.themeCounts;
+  const total = memberSummary.totalMembers;
+  const pills = [
+    {
+      key: "all",
+      label: "All",
+      color: "#EEF4FF",
+      count: total,
+    },
+    ...Object.entries(counts).map(([theme, count]) => ({
+      key: theme,
+      label: theme,
+      color: palette[theme] || "#94A3B8",
+      count,
+    })),
+  ];
+
+  themePills.innerHTML = pills
+    .map(
+      (pill) => `
+        <button
+          class="theme-pill ${state.theme === pill.key ? "active" : ""}"
+          data-theme="${pill.key}"
+          type="button"
+        >
+          <span class="theme-dot" style="color:${pill.color}; background:${pill.color};"></span>
+          <span>${pill.label}</span>
+          <span class="theme-pill-count">${formatNumber(pill.count)}</span>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function renderDetail(member) {
+  if (!member) {
+    detailPanel.innerHTML = `<div class="empty-state">No profiles match the current filters.</div>`;
+    return;
+  }
+
+  detailPanel.innerHTML = `
+    <div class="detail-top">
+      <div class="detail-identity">
+        <div class="detail-avatar" style="border-color:${member.color}55;">
+          ${renderAvatar(member, "avatar-large")}
+        </div>
+        <div class="detail-heading">
+      <div class="detail-theme">
+        <span class="theme-dot" style="color:${member.color}; background:${member.color};"></span>
+        <span>${member.theme}</span>
+      </div>
+      <h2 class="detail-name">${member.name}</h2>
+      <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
+        </div>
+      </div>
+    </div>
+
+    ${renderSpaceLinks(member, "detail")}
+    ${renderSocialLinks(member, "detail")}
+  `;
+}
+
+function renderRoster(list) {
+  const spotlight = [...spotlightMembers(list)]
+    .sort((a, b) => {
+      const showcaseScore = (spotlightPriority.get(b.name) || 0) - (spotlightPriority.get(a.name) || 0);
+      if (showcaseScore) return showcaseScore;
+      const bossScore = Number(b.isBoss) - Number(a.isBoss);
+      if (bossScore) return bossScore;
+      const featuredScore = Number(b.featured) - Number(a.featured);
+      if (featuredScore) return featuredScore;
+      const densityScore = b.descLength + b.spaceCount * 24 - (a.descLength + a.spaceCount * 24);
+      if (densityScore) return densityScore;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 9);
+
+  if (!spotlight.length) {
+    rosterGrid.innerHTML = `<div class="empty-state">No spotlight cards for this filter yet. Try another theme or a broader keyword.</div>`;
+    return;
+  }
+
+  rosterGrid.innerHTML = spotlight
+    .map(
+      (member) => `
+        <article class="roster-item" data-entity-id="${member.entityId}">
+          <div class="roster-top">
+            <div>
+              <p class="roster-name">${member.name}</p>
+              <p class="roster-theme">${member.isBoss ? "Founder" : member.theme}</p>
+            </div>
+            <div class="roster-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
+              ${renderAvatar(member, "avatar-small")}
+            </div>
+          </div>
+          <p class="roster-description">${truncate(member.description, 175)}</p>
+          ${renderSpaceLinks(member, "card")}
+          ${renderSocialLinks(member, "card")}
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function updateSummary(list) {
+  const count = list.length;
+  const activeTheme = state.theme === "all" ? "all themes" : state.theme;
+  selectionSummary.textContent =
+    count === members.length && !state.query
+      ? `${formatNumber(count)} curator profiles with bios, grouped by shared themes.`
+      : `${formatNumber(count)} curator profiles match "${activeTheme}"${state.query ? ` and "${state.query}"` : ""}.`;
+}
+
+function anchorMap(list, width, height) {
+  const themes = [...new Set(list.map((member) => member.theme))];
+  const radiusX = width * 0.32;
+  const radiusY = height * 0.28;
+  return new Map(
+    themes.map((theme, index) => {
+      const angle = state.phase + (index / Math.max(themes.length, 1)) * Math.PI * 2;
+      return [
+        theme,
+        {
+          x: width / 2 + Math.cos(angle) * radiusX,
+          y: height / 2 + Math.sin(angle) * radiusY,
+        },
+      ];
+    }),
+  );
+}
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const bounds = canvas.getBoundingClientRect();
+  canvas.width = Math.round(bounds.width * dpr);
+  canvas.height = Math.round(bounds.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawFrame() {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const list = activeMembers();
+  const selected = selectedMember(list);
+  const hoveredId = state.hoveredId;
+  const anchors = anchorMap(list, width, height);
+
+  ctx.clearRect(0, 0, width, height);
+
+  const backgroundGlow = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height * 0.52);
+  backgroundGlow.addColorStop(0, "rgba(182, 128, 255, 0.08)");
+  backgroundGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = backgroundGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  anchors.forEach((anchor, theme) => {
+    const color = palette[theme] || "#94A3B8";
+    ctx.beginPath();
+    ctx.strokeStyle = `${color}25`;
+    ctx.lineWidth = 1;
+    ctx.arc(anchor.x, anchor.y, 90, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = "#796f99";
+    ctx.font = '12px "Avenir Next", sans-serif';
+    ctx.fillText(theme, anchor.x - 34, anchor.y - 100);
+  });
+  ctx.restore();
+
+  list.forEach((member, index) => {
+    const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
+    const angle = member.seed + index * 0.07 + performance.now() * 0.00008;
+    const orbit = 34 + (index % 12) * 12 + member.spaceCount * 6;
+    const targetX = anchor.x + Math.cos(angle) * orbit;
+    const targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.7);
+
+    member.vx += (targetX - member.x) * 0.012;
+    member.vy += (targetY - member.y) * 0.012;
+    member.vx *= 0.92;
+    member.vy *= 0.92;
+    member.x = member.x || targetX;
+    member.y = member.y || targetY;
+    member.x += member.vx;
+    member.y += member.vy;
+  });
+
+  list.forEach((member) => {
+    const highlighted =
+      member.entityId === hoveredId ||
+      member.entityId === selected?.entityId ||
+      member.entityId === state.selectedId;
+    const radius = highlighted ? member.radius + 2.5 : member.radius;
+
+    ctx.beginPath();
+    ctx.fillStyle = `${member.color}${highlighted ? "" : "cc"}`;
+    ctx.shadowBlur = highlighted ? 28 : 16;
+    ctx.shadowColor = member.color;
+    ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (highlighted) {
+      ctx.beginPath();
+      ctx.strokeStyle = `${member.color}66`;
+      ctx.lineWidth = 1.5;
+      ctx.arc(member.x, member.y, radius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#2b2734";
+      ctx.font = '13px "Avenir Next", sans-serif';
+      ctx.fillText(member.name, member.x + radius + 8, member.y - radius - 6);
+    }
+  });
+
+  state.phase += 0.0009;
+  requestAnimationFrame(drawFrame);
+}
+
+function pickMemberFromPointer(event) {
+  const bounds = canvas.getBoundingClientRect();
+  const x = event.clientX - bounds.left;
+  const y = event.clientY - bounds.top;
+  const list = activeMembers();
+
+  let nearest = null;
+  let nearestDistance = Infinity;
+
+  list.forEach((member) => {
+    const distance = Math.hypot(member.x - x, member.y - y);
+    if (distance < member.radius + 10 && distance < nearestDistance) {
+      nearest = member;
+      nearestDistance = distance;
+    }
+  });
+
+  return nearest;
+}
+
+function syncUI() {
+  const list = activeMembers();
+  const chosen = selectedMember(list);
+  if (chosen) state.selectedId = chosen.entityId;
+  buildThemePills();
+  renderSpotlightFilters(list);
+  updateSummary(list);
+  renderDetail(chosen);
+  renderRoster(list);
+}
+
+buildThemePills();
+resizeCanvas();
+syncUI();
+requestAnimationFrame(drawFrame);
+
+searchInput.addEventListener("input", (event) => {
+  state.query = event.target.value;
+  syncUI();
+});
+
+themePills.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-theme]");
+  if (!button) return;
+  state.theme = button.dataset.theme;
+  syncUI();
+});
+
+spotlightFilters.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-roster-filter]");
+  if (!button) return;
+  state.rosterFilter = button.dataset.rosterFilter;
+  renderSpotlightFilters(activeMembers());
+  renderRoster(activeMembers());
+});
+
+shuffleButton.addEventListener("click", () => {
+  state.phase += Math.PI / 3;
+});
+
+canvas.addEventListener("mousemove", (event) => {
+  const member = pickMemberFromPointer(event);
+  state.hoveredId = member?.entityId || null;
+  canvas.style.cursor = member ? "pointer" : "default";
+});
+
+canvas.addEventListener("mouseleave", () => {
+  state.hoveredId = null;
+  canvas.style.cursor = "default";
+});
+
+canvas.addEventListener("click", (event) => {
+  const member = pickMemberFromPointer(event);
+  if (!member) return;
+  state.selectedId = member.entityId;
+  renderDetail(member);
+  renderRoster(activeMembers());
+});
+
+rosterGrid.addEventListener("click", (event) => {
+  if (event.target.closest("a")) return;
+  const card = event.target.closest("[data-entity-id]");
+  if (!card) return;
+  state.selectedId = card.dataset.entityId;
+  renderDetail(selectedMember(activeMembers()));
+});
+
+window.addEventListener("resize", resizeCanvas);

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Geo Curators Atlas</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Geo Community Visualization</p>
+          <h1>Geo Curators Atlas</h1>
+          <p class="hero-text">
+            A living map of the Geo Community: explore standout profiles and
+            dive in the richest bios from the community.
+          </p>
+        </div>
+      </header>
+
+      <section class="controls-panel">
+        <div class="toolbar-meta">
+          <p id="selection-summary">Loading curator profiles...</p>
+          <button id="shuffle-button" type="button">Remix the scene</button>
+        </div>
+
+        <div class="theme-pills" id="theme-pills"></div>
+      </section>
+
+      <section class="visual-grid">
+        <article class="card galaxy-card">
+          <div class="card-header">
+            <div>
+              <p class="card-kicker">Constellation</p>
+              <h2>The curator landscape</h2>
+            </div>
+            <p class="card-caption">
+              Each point represents one curator. Clusters follow theme
+              similarities detected in profile descriptions.
+            </p>
+          </div>
+
+          <div class="canvas-wrap">
+            <canvas id="galaxy-canvas" width="1200" height="760"></canvas>
+            <div class="canvas-overlay">
+              <p>Hover or click a profile to open the curator card.</p>
+            </div>
+          </div>
+        </article>
+
+        <aside class="card detail-card">
+          <div id="detail-panel"></div>
+        </aside>
+      </section>
+
+      <section class="card roster-card">
+        <div class="roster-topbar">
+          <div class="roster-intro">
+            <p class="card-kicker">Spotlight</p>
+            <h2>Profiles to explore</h2>
+            <p class="roster-lead">Search, filter, and browse the strongest curator profiles in one place.</p>
+          </div>
+          <div class="spotlight-panel">
+            <label class="search-wrap spotlight-search">
+              <span>Search</span>
+              <input
+                id="search-input"
+                type="search"
+                placeholder="Name, bio, expertise, keyword..."
+                autocomplete="off"
+              />
+            </label>
+            <div class="spotlight-filters" id="spotlight-filters"></div>
+          </div>
+        </div>
+        <div class="roster-grid" id="roster-grid"></div>
+      </section>
+    </div>
+
+    <script src="./members-data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
