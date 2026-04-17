@@ -575,8 +575,6 @@ const detailPanel = document.querySelector("#detail-panel");
 const detailCard = document.querySelector(".detail-card");
 const selectionSummary = document.querySelector("#selection-summary");
 const rosterCard = document.querySelector(".roster-card");
-const skillsVizModal = document.getElementById("skills-viz-modal");
-const skillsVizCanvas = document.getElementById("skills-viz-canvas");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -1040,147 +1038,6 @@ function truncateGalaxyLabel(name, max = 20) {
   return `${name.slice(0, max - 1).trim()}…`;
 }
 
-function truncateSkillLabelForCanvas(s, max = 18) {
-  const t = String(s || "").trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1).trim()}…`;
-}
-
-function skillAngleJitter(skill) {
-  let h = 2166136261;
-  const str = String(skill);
-  for (let i = 0; i < str.length; i += 1) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
-  return ((h >>> 0) % 1000) / 1000 - 0.5;
-}
-
-function roundRectPath(ctx, x, y, w, h, rad) {
-  const r = Math.min(rad, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/** Curved constellation-style skill graph (modal canvas only). No arrowheads. */
-function drawSkillsBurstRadial(ctx, skills, mx, my, radius, viewW, viewH, hubColor) {
-  if (!skills?.length) return;
-  const n = skills.length;
-  const margin = 18;
-  const labelR = Math.min(viewW, viewH) * 0.36;
-  const font = '600 12px system-ui, "Avenir Next", "Segoe UI", sans-serif';
-  ctx.save();
-  ctx.font = font;
-
-  const layout = skills.map((skill, i) => {
-    const base = -Math.PI / 2 + (i / n) * Math.PI * 2 + skillAngleJitter(skill) * 0.42;
-    let tx = mx + Math.cos(base) * labelR;
-    let ty = my + Math.sin(base) * labelR;
-    const text = truncateSkillLabelForCanvas(skill, 18);
-    const tw = ctx.measureText(text).width;
-    const padX = 12;
-    const padY = 9;
-    const boxW = tw + padX * 2;
-    const boxH = 30;
-    tx = Math.max(margin + boxW / 2, Math.min(viewW - margin - boxW / 2, tx));
-    ty = Math.max(margin + boxH / 2, Math.min(viewH - margin - boxH / 2, ty));
-    return { ang: base, tx, ty, text, tw, boxW, boxH, padX, padY };
-  });
-
-  const hubEdge = radius + 4;
-
-  layout.forEach((L, i) => {
-    const dx = L.tx - mx;
-    const dy = L.ty - my;
-    const dist = Math.hypot(dx, dy) || 1;
-    const nx = dx / dist;
-    const ny = dy / dist;
-    const sx = mx + nx * hubEdge;
-    const sy = my + ny * hubEdge;
-    const ex = L.tx - nx * (L.boxW / 2 + 6);
-    const ey = L.ty - ny * (L.boxH / 2 + 5);
-
-    const midX = (sx + ex) / 2;
-    const midY = (sy + ey) / 2;
-    const px = -(ey - sy);
-    const py = ex - sx;
-    const pl = Math.hypot(px, py) || 1;
-    const bend = (20 + (i % 4) * 10) * (i % 2 === 0 ? 1 : -1);
-    const cx = midX + (px / pl) * bend;
-    const cy = midY + (py / pl) * bend;
-
-    const grd = ctx.createLinearGradient(sx, sy, ex, ey);
-    grd.addColorStop(0, "rgba(124, 92, 220, 0.22)");
-    grd.addColorStop(0.45, "rgba(99, 102, 241, 0.38)");
-    grd.addColorStop(1, "rgba(167, 139, 250, 0.18)");
-
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.quadraticCurveTo(cx, cy, ex, ey);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.quadraticCurveTo(cx, cy, ex, ey);
-    ctx.strokeStyle = grd;
-    ctx.lineWidth = 2.1;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.arc(ex, ey, 3.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(99, 102, 241, 0.85)";
-    ctx.arc(ex, ey, 2, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  layout.forEach((L) => {
-    const x = L.tx - L.boxW / 2;
-    const y = L.ty - L.boxH / 2;
-    roundRectPath(ctx, x, y, L.boxW, L.boxH, 999);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(116, 71, 245, 0.18)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#2a2438";
-    ctx.fillText(L.text, L.tx, L.ty);
-  });
-
-  ctx.beginPath();
-  ctx.arc(mx, my, radius + 10, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(mx, my, radius + 4, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.fillStyle = hubColor || "#7447f5";
-  ctx.shadowBlur = 22;
-  ctx.shadowColor = `${hubColor || "#7447f5"}66`;
-  ctx.arc(mx, my, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.beginPath();
-  ctx.arc(mx, my, radius - 3, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.fill();
-
-  ctx.restore();
-}
-
 function updateSummary(list) {
   const count = list.length;
   const activeTheme = state.theme === "all" ? "all themes" : state.theme;
@@ -1583,75 +1440,6 @@ if (rosterCard) {
   });
 }
 
-function closeSkillsVizModal() {
-  if (!skillsVizModal) return;
-  skillsVizModal.hidden = true;
-  delete skillsVizModal.dataset.entityId;
-  document.body.style.overflow = "";
-}
-
-function paintSkillsVizModal(member) {
-  const wrap = document.querySelector(".skills-viz-canvas-wrap");
-  const canvas = skillsVizCanvas;
-  if (!wrap || !canvas || !member || wrap.hidden) return;
-  const raw = window.devicePixelRatio || 1;
-  const dpr = Math.min(2, raw);
-  const w = Math.max(340, Math.floor(wrap.clientWidth || 560));
-  const h = Math.min(500, Math.max(320, Math.floor(w * 0.66)));
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  canvas.style.width = `${w}px`;
-  canvas.style.height = `${h}px`;
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  const mx = w / 2;
-  const my = h / 2;
-  const radGrad = ctx.createRadialGradient(mx, my, 0, mx, my, Math.max(w, h) * 0.55);
-  radGrad.addColorStop(0, "rgba(255, 255, 255, 0.99)");
-  radGrad.addColorStop(0.42, "rgba(250, 245, 255, 0.96)");
-  radGrad.addColorStop(1, "rgba(218, 206, 242, 0.65)");
-  ctx.fillStyle = radGrad;
-  ctx.fillRect(0, 0, w, h);
-  const vignette = ctx.createRadialGradient(mx, my, Math.min(w, h) * 0.25, mx, my, Math.max(w, h) * 0.72);
-  vignette.addColorStop(0, "rgba(255, 255, 255, 0)");
-  vignette.addColorStop(1, "rgba(88, 72, 120, 0.06)");
-  ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, w, h);
-
-  const r = 20;
-  const hub = member.color || "#7447f5";
-  const skills = memberSkillsList(member);
-  if (skills.length) drawSkillsBurstRadial(ctx, skills, mx, my, r, w, h, hub);
-}
-
-function openSkillsVizModal(member) {
-  if (!skillsVizModal || !member) return;
-  const titleEl = document.getElementById("skills-viz-title");
-  const subEl = document.getElementById("skills-viz-sub");
-  const emptyEl = document.getElementById("skills-viz-empty");
-  const wrap = document.querySelector(".skills-viz-canvas-wrap");
-  if (titleEl) titleEl.textContent = member.name || "";
-  if (subEl) subEl.textContent = member.theme || "";
-  const skills = memberSkillsList(member);
-  if (emptyEl) emptyEl.hidden = skills.length > 0;
-  if (wrap) wrap.hidden = skills.length === 0;
-  skillsVizModal.dataset.entityId = member.entityId;
-  skillsVizModal.hidden = false;
-  document.body.style.overflow = "hidden";
-  requestAnimationFrame(() => paintSkillsVizModal(member));
-}
-
-if (skillsVizModal) {
-  skillsVizModal.addEventListener("click", (event) => {
-    if (event.target.closest("[data-close-skills-viz]")) closeSkillsVizModal();
-  });
-}
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && skillsVizModal && !skillsVizModal.hidden) closeSkillsVizModal();
-});
-
 canvas.addEventListener("mousemove", (event) => {
   const member = pickMemberFromPointer(event);
   state.hoveredId = member?.entityId || null;
@@ -1669,7 +1457,6 @@ canvas.addEventListener("click", (event) => {
   state.selectedId = member.entityId;
   renderDetail(member);
   renderRoster(activeMembers());
-  if (memberSkillsList(member).length) openSkillsVizModal(member);
 });
 
 if (rosterGrid) {
@@ -1724,8 +1511,4 @@ if (detailCard) {
 
 window.addEventListener("resize", () => {
   resizeCanvas();
-  if (skillsVizModal && !skillsVizModal.hidden && skillsVizModal.dataset.entityId) {
-    const m = members.find((x) => x.entityId === skillsVizModal.dataset.entityId);
-    if (m) paintSkillsVizModal(m);
-  }
 });

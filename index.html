@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache" />
     <title>Geo Curators Atlas</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
   </head>
   <body>
     <div class="page-shell">
@@ -45,7 +46,9 @@
           <div class="canvas-wrap">
             <canvas id="galaxy-canvas"></canvas>
             <div class="canvas-overlay">
-              <p>Hover or click a dot for the curator card. If they have skills in the data, a separate panel opens—skills are never drawn on this map.</p>
+              <p>
+                Hover or click a dot to select a curator. Their profile appears in the panel on the right; nothing opens on top of the page.
+              </p>
             </div>
           </div>
         </article>
@@ -91,22 +94,8 @@
       </section>
     </div>
 
-    <div id="skills-viz-modal" class="skills-viz-modal" hidden>
-      <div class="skills-viz-backdrop" data-close-skills-viz tabindex="-1" aria-hidden="true"></div>
-      <div class="skills-viz-dialog" role="dialog" aria-modal="true" aria-labelledby="skills-viz-title">
-        <button type="button" class="skills-viz-close" data-close-skills-viz aria-label="Close skills map">×</button>
-        <p class="skills-viz-kicker">Skill constellation</p>
-        <h2 id="skills-viz-title" class="skills-viz-title"></h2>
-        <p id="skills-viz-sub" class="skills-viz-sub"></p>
-        <div class="skills-viz-canvas-wrap">
-          <canvas id="skills-viz-canvas" aria-label="Skills visualization"></canvas>
-        </div>
-        <p id="skills-viz-empty" class="skills-viz-empty" hidden>No skills listed for this curator yet.</p>
-      </div>
-    </div>
-
-    <script src="./cloud-config.js"></script>
-    <script src="./members-data.js"></script>
-    <script src="./app.js"></script>
+    <script src="./cloud-config.js?v=8"></script>
+    <script src="./members-data.js?v=8"></script>
+    <script src="./app.js?v=8"></script>
   </body>
 </html>
