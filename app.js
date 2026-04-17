@@ -604,10 +604,23 @@ function anchorMap(list, width, height) {
 }
 
 function readCanvasCssSize() {
-  const br = canvas.getBoundingClientRect();
-  const width = Math.max(120, Math.round(br.width) || canvas.clientWidth);
-  const height = Math.max(120, Math.round(br.height) || canvas.clientHeight);
-  return { width, height, br };
+  let w = canvas.clientWidth;
+  let h = canvas.clientHeight;
+  if (!w || !h) {
+    const r = canvas.getBoundingClientRect();
+    w = r.width;
+    h = r.height;
+  }
+  if (w < 4 || h < 4) {
+    const wrap = canvasWrap;
+    if (wrap) {
+      w = wrap.clientWidth || wrap.getBoundingClientRect().width;
+      h = wrap.clientHeight || wrap.getBoundingClientRect().height;
+    }
+  }
+  const width = Math.max(120, Math.round(w) || 120);
+  const height = Math.max(120, Math.round(h) || 120);
+  return { width, height, br: canvas.getBoundingClientRect() };
 }
 
 function resizeCanvas() {
@@ -854,6 +867,11 @@ if (canvasWrap && typeof ResizeObserver !== "undefined") {
   });
   ro.observe(canvasWrap);
 }
+
+window.addEventListener("load", () => {
+  resizeCanvas();
+  snapSingleThemeVogelPositions(activeMembers());
+});
 
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
