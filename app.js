@@ -13,6 +13,8 @@ const palette = {
 const BOSS_NAME = "Yaniv Tal";
 const BOSS_COLOR = "#FFD84D";
 
+const ROSTER_PAGE_SIZE = 12;
+
 const data = window.GEO_CURATORS_DATA;
 const socialIcons = {
   x: `
@@ -202,6 +204,7 @@ const state = {
   query: "",
   theme: "all",
   rosterFilter: "all",
+  rosterPage: 1,
   hoveredId: null,
   selectedId: demoMember?.entityId || null,
   phase: 0,
@@ -212,6 +215,8 @@ const ctx = canvas.getContext("2d");
 const searchInput = document.querySelector("#search-input");
 const themePills = document.querySelector("#theme-pills");
 const rosterGrid = document.querySelector("#roster-grid");
+const rosterPagination = document.querySelector("#roster-pagination");
+const rosterListShell = document.querySelector("#roster-list-shell");
 const spotlightFilters = document.querySelector("#spotlight-filters");
 const detailPanel = document.querySelector("#detail-panel");
 const selectionSummary = document.querySelector("#selection-summary");
@@ -316,6 +321,20 @@ function spotlightMembers(list) {
   return list.filter((member) => member.socialLinks?.[state.rosterFilter]);
 }
 
+function sortedSpotlightMembers(list) {
+  return [...spotlightMembers(list)].sort((a, b) => {
+    const showcaseScore = (spotlightPriority.get(b.name) || 0) - (spotlightPriority.get(a.name) || 0);
+    if (showcaseScore) return showcaseScore;
+    const bossScore = Number(b.isBoss) - Number(a.isBoss);
+    if (bossScore) return bossScore;
+    const featuredScore = Number(b.featured) - Number(a.featured);
+    if (featuredScore) return featuredScore;
+    const densityScore = b.descLength + b.spaceCount * 24 - (a.descLength + a.spaceCount * 24);
+    if (densityScore) return densityScore;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function renderSpotlightFilters(list) {
   const items = rosterFilterItems(list);
   const activeItem = items.find((item) => item.key === state.rosterFilter && item.count > 0);
@@ -403,26 +422,24 @@ function renderDetail(member) {
 }
 
 function renderRoster(list) {
-  const spotlight = [...spotlightMembers(list)]
-    .sort((a, b) => {
-      const showcaseScore = (spotlightPriority.get(b.name) || 0) - (spotlightPriority.get(a.name) || 0);
-      if (showcaseScore) return showcaseScore;
-      const bossScore = Number(b.isBoss) - Number(a.isBoss);
-      if (bossScore) return bossScore;
-      const featuredScore = Number(b.featured) - Number(a.featured);
-      if (featuredScore) return featuredScore;
-      const densityScore = b.descLength + b.spaceCount * 24 - (a.descLength + a.spaceCount * 24);
-      if (densityScore) return densityScore;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 9);
+  const sorted = sortedSpotlightMembers(list);
+  const total = sorted.length;
 
-  if (!spotlight.length) {
+  if (!total) {
     rosterGrid.innerHTML = `<div class="empty-state">No spotlight cards for this filter yet. Try another theme or a broader keyword.</div>`;
+    rosterPagination.innerHTML = "";
     return;
   }
 
-  rosterGrid.innerHTML = spotlight
+  const totalPages = Math.max(1, Math.ceil(total / ROSTER_PAGE_SIZE));
+  if (state.rosterPage > totalPages) state.rosterPage = totalPages;
+  if (state.rosterPage < 1) state.rosterPage = 1;
+
+  const start = (state.rosterPage - 1) * ROSTER_PAGE_SIZE;
+  const end = Math.min(start + ROSTER_PAGE_SIZE, total);
+  const pageItems = sorted.slice(start, end);
+
+  rosterGrid.innerHTML = pageItems
     .map(
       (member) => `
         <article class="roster-item" data-entity-id="${member.entityId}">
@@ -442,6 +459,24 @@ function renderRoster(list) {
       `,
     )
     .join("");
+
+  const atFirst = state.rosterPage <= 1;
+  const atLast = state.rosterPage >= totalPages;
+  rosterPagination.innerHTML = `
+    <p class="roster-pagination-range" id="roster-page-summary">
+      Showing <strong>${formatNumber(start + 1)}–${formatNumber(end)}</strong> of
+      <strong>${formatNumber(total)}</strong>
+      <span class="roster-pagination-page">· Page ${formatNumber(state.rosterPage)} of ${formatNumber(totalPages)}</span>
+    </p>
+    <div class="roster-pagination-nav">
+      <button type="button" class="roster-page-btn" data-roster-nav="prev" ${atFirst ? "disabled" : ""} aria-label="Previous page">
+        Previous
+      </button>
+      <button type="button" class="roster-page-btn" data-roster-nav="next" ${atLast ? "disabled" : ""} aria-label="Next page">
+        Next
+      </button>
+    </div>
+  `;
 }
 
 function updateSummary(list) {
@@ -580,6 +615,7 @@ function pickMemberFromPointer(event) {
 }
 
 function syncUI() {
+  state.rosterPage = 1;
   const list = activeMembers();
   const chosen = selectedMember(list);
   if (chosen) state.selectedId = chosen.entityId;
@@ -611,8 +647,27 @@ spotlightFilters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-roster-filter]");
   if (!button) return;
   state.rosterFilter = button.dataset.rosterFilter;
+  state.rosterPage = 1;
   renderSpotlightFilters(activeMembers());
   renderRoster(activeMembers());
+});
+
+document.querySelector(".roster-card").addEventListener("click", (event) => {
+  const nav = event.target.closest("[data-roster-nav]");
+  if (!nav || nav.disabled) return;
+  const list = activeMembers();
+  const sorted = sortedSpotlightMembers(list);
+  const total = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(total / ROSTER_PAGE_SIZE));
+  if (nav.dataset.rosterNav === "prev" && state.rosterPage > 1) {
+    state.rosterPage -= 1;
+    renderRoster(list);
+    rosterListShell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } else if (nav.dataset.rosterNav === "next" && state.rosterPage < totalPages) {
+    state.rosterPage += 1;
+    renderRoster(list);
+    rosterListShell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 });
 
 canvas.addEventListener("mousemove", (event) => {
