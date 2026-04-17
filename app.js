@@ -1059,6 +1059,92 @@ function truncateGalaxyLabel(name, max = 20) {
   return `${name.slice(0, max - 1).trim()}…`;
 }
 
+function truncateSkillLabelForCanvas(s, max = 22) {
+  const t = String(s || "").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1).trim()}…`;
+}
+
+/** Skill spokes from the selected dot (constellation), matching in-card skills. */
+function drawGalaxySkillBurst(ctx, pin, width, height, selected, hoveredId) {
+  const skills = memberSkillsList(pin);
+  if (!skills.length) return;
+  const radius = memberDisplayRadius(pin, selected, hoveredId);
+  const mx = pin.x;
+  const my = pin.y;
+  const n = skills.length;
+  const margin = 10;
+  const maxReach = Math.min(width, height) * 0.24;
+  const lineLen = Math.min(130, 58 + n * 11, maxReach - radius - 28);
+  if (lineLen < 28) return;
+
+  const lineColor = "rgba(37, 99, 235, 0.88)";
+  const lineSoft = "rgba(37, 99, 235, 0.22)";
+  const headSize = 6;
+
+  ctx.save();
+  ctx.font = '600 11px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+  for (let i = 0; i < n; i += 1) {
+    const ang = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    const ux = Math.cos(ang);
+    const uy = Math.sin(ang);
+    const r0 = radius + 5;
+    const x0 = mx + ux * r0;
+    const y0 = my + uy * r0;
+    let r1 = r0 + lineLen;
+    let x1 = mx + ux * r1;
+    let y1 = my + uy * r1;
+    for (let k = 0; k < 8 && (x1 < margin || x1 > width - margin || y1 < margin || y1 > height - margin); k += 1) {
+      r1 = r0 + (r1 - r0) * 0.86;
+      x1 = mx + ux * r1;
+      y1 = my + uy * r1;
+    }
+
+    ctx.beginPath();
+    ctx.strokeStyle = lineSoft;
+    ctx.lineWidth = 4;
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 1.85;
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    const bx = x1 - ux * headSize;
+    const by = y1 - uy * headSize;
+    const perp = 3.2;
+    ctx.beginPath();
+    ctx.fillStyle = lineColor;
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(bx - uy * perp, by + ux * perp);
+    ctx.lineTo(bx + uy * perp, by - ux * perp);
+    ctx.closePath();
+    ctx.fill();
+
+    const text = truncateSkillLabelForCanvas(skills[i], 20);
+    const pad = 12;
+    const tw = ctx.measureText(text).width;
+    let tx = x1 + ux * pad;
+    let ty = y1 + uy * pad;
+    tx = Math.max(margin + tw / 2, Math.min(width - margin - tw / 2, tx));
+    ty = Math.max(margin + 8, Math.min(height - margin - 8, ty));
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.strokeText(text, tx, ty);
+    ctx.fillStyle = "#1e293b";
+    ctx.fillText(text, tx, ty);
+  }
+  ctx.restore();
+}
+
 function updateSummary(list) {
   const count = list.length;
   const activeTheme = state.theme === "all" ? "all themes" : state.theme;
@@ -1276,6 +1362,11 @@ function drawFrame() {
       ctx.stroke();
     }
   });
+
+  const pinSkills = state.selectedId ? list.find((m) => m.entityId === state.selectedId) : null;
+  if (pinSkills) {
+    drawGalaxySkillBurst(ctx, pinSkills, width, height, selected, hoveredId);
+  }
 
   if (isGalaxyThemeFocus()) {
     ctx.save();
