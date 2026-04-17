@@ -210,6 +210,8 @@ const state = {
   phase: 0,
 };
 
+const __galaxyThemeForReset = { theme: state.theme };
+
 const canvas = document.querySelector("#galaxy-canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
 if (typeof ctx.imageSmoothingQuality === "string") {
@@ -530,8 +532,8 @@ function anchorMap(list, width, height) {
     const theme = themes[0];
     return new Map([[theme, { x: width / 2, y: height / 2 }]]);
   }
-  const radiusX = width * 0.34;
-  const radiusY = height * 0.3;
+  const radiusX = width * 0.41;
+  const radiusY = height * 0.37;
   return new Map(
     themes.map((theme, index) => {
       const angle = state.phase + (index / Math.max(themes.length, 1)) * Math.PI * 2;
@@ -556,8 +558,12 @@ function resizeCanvas() {
 }
 
 function drawFrame() {
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
+  window.__galaxyDbgFrame = (window.__galaxyDbgFrame || 0) + 1;
+  const __dbf = window.__galaxyDbgFrame;
+
+  const brSize = canvas.getBoundingClientRect();
+  const width = Math.max(120, Math.round(brSize.width) || canvas.clientWidth);
+  const height = Math.max(120, Math.round(brSize.height) || canvas.clientHeight);
   const list = activeMembers();
   const selected = selectedMember(list);
   const hoveredId = state.hoveredId;
@@ -576,6 +582,41 @@ function drawFrame() {
   const orbitScale = galaxyOrbitScale();
   const diskHalfW = singleThemeDisk ? Math.max(64, width * 0.5 - 40) : 0;
   const diskHalfH = singleThemeDisk ? Math.max(64, height * 0.5 - 76) : 0;
+
+  // #region agent log
+  if (__dbf % 48 === 1) {
+    const firstAnchor = anchors.size ? [...anchors.entries()][0] : null;
+    fetch("http://127.0.0.1:7774/ingest/d02dfdf6-77ee-41f7-abb2-591b4c67c578", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
+      body: JSON.stringify({
+        sessionId: "02d565",
+        runId: "post-fix",
+        hypothesisId: "H-A-B-D-E",
+        location: "app.js:drawFrame:layout",
+        message: "canvas + branch + disk half-axes",
+        data: {
+          clientW: width,
+          clientH: height,
+          rectW: brSize.width,
+          rectH: brSize.height,
+          clientWidthRaw: canvas.clientWidth,
+          clientHeightRaw: canvas.clientHeight,
+          theme: state.theme,
+          listLen: list.length,
+          anchorSize: anchors.size,
+          singleThemeDisk,
+          diskHalfW,
+          diskHalfH,
+          firstAnchor,
+          galaxyFocus: isGalaxyThemeFocus(),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
   const ringRadius = singleThemeDisk
     ? Math.max(diskHalfW, diskHalfH)
     : isGalaxyThemeFocus()
@@ -627,8 +668,8 @@ function drawFrame() {
       targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
       targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
     } else {
-      const viewScale = Math.min(1.55, Math.min(width, height) / 560);
-      const orbit = (36 + (index % 12) * 14 + member.spaceCount * 7) * orbitScale * viewScale;
+      const viewScale = Math.min(1.85, Math.min(width, height) / 520);
+      const orbit = (42 + (index % 12) * 16 + member.spaceCount * 8) * orbitScale * viewScale;
       targetX = anchor.x + Math.cos(angle) * orbit;
       targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.72);
     }
@@ -642,6 +683,37 @@ function drawFrame() {
     member.x += member.vx;
     member.y += member.vy;
   });
+
+  // #region agent log
+  if (__dbf % 48 === 1 && list.length) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const m of list) {
+      if (m.x == null || m.y == null) continue;
+      minX = Math.min(minX, m.x);
+      maxX = Math.max(maxX, m.x);
+      minY = Math.min(minY, m.y);
+      maxY = Math.max(maxY, m.y);
+    }
+    const spreadW = Number.isFinite(maxX - minX) ? maxX - minX : -1;
+    const spreadH = Number.isFinite(maxY - minY) ? maxY - minY : -1;
+    fetch("http://127.0.0.1:7774/ingest/d02dfdf6-77ee-41f7-abb2-591b4c67c578", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
+      body: JSON.stringify({
+        sessionId: "02d565",
+        runId: "post-fix",
+        hypothesisId: "H-C",
+        location: "app.js:drawFrame:bounds",
+        message: "member position spread after physics",
+        data: { minX, maxX, minY, maxY, spreadW, spreadH, clientW: width, clientH: height, singleThemeDisk },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   list.forEach((member) => {
     const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
@@ -723,6 +795,15 @@ function pickMemberFromPointer(event) {
 }
 
 function syncUI() {
+  if (__galaxyThemeForReset.theme !== state.theme) {
+    __galaxyThemeForReset.theme = state.theme;
+    members.forEach((m) => {
+      m.x = undefined;
+      m.y = undefined;
+      m.vx = 0;
+      m.vy = 0;
+    });
+  }
   state.rosterPage = 1;
   const list = activeMembers();
   const chosen = selectedMember(list);

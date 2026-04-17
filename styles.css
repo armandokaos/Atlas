@@ -277,6 +277,12 @@ h1 {
   margin-bottom: 24px;
 }
 
+.galaxy-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .card {
   padding: 22px;
   border-radius: 32px;
@@ -401,7 +407,11 @@ h1 {
   position: relative;
   border-radius: 28px;
   overflow: hidden;
-  min-height: 760px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: clamp(560px, 65vh, 920px);
   background:
     radial-gradient(circle at 20% 12%, rgba(176, 123, 255, 0.16), transparent 24%),
     radial-gradient(circle at 80% 18%, rgba(113, 231, 255, 0.16), transparent 24%),
@@ -411,7 +421,9 @@ h1 {
 
 #galaxy-canvas {
   width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 0;
   display: block;
 }
 
@@ -800,7 +812,7 @@ h1 {
   }
 
   .canvas-wrap {
-    min-height: 540px;
+    height: clamp(480px, 58vh, 780px);
   }
 
   .card-header {
@@ -839,7 +851,7 @@ h1 {
   }
 
   .canvas-wrap {
-    min-height: 460px;
+    height: clamp(400px, 52vh, 680px);
   }
 
   .toolbar-meta {
