@@ -608,6 +608,19 @@ h1 {
   position: relative;
 }
 
+body.galaxy-person-focus .detail-card {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  max-height: 0;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+
 #detail-panel {
   display: grid;
   gap: 18px;

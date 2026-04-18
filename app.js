@@ -247,6 +247,491 @@ const state = {
   phase: 0,
 };
 
+/** Immersive person → skills constellation (canvas-only). See plan: focus_personne_canvas */
+const GALAXY_FOCUS_MAX_SKILLS = 12;
+const GALAXY_FOCUS_ENTER_MS = 2000;
+const GALAXY_FOCUS_EXIT_MS = 1700;
+const GF_FADE_END = 0.11;
+const GF_MOVE_END = 0.52;
+const GF_GROW_END = 0.68;
+const GF_SKILLS_END = 0.86;
+
+const galaxyFocus = {
+  mode: "landscape",
+  memberId: null,
+  member: null,
+  transitionStart: 0,
+  skillsSnapshot: [],
+  skillNodes: [],
+  snapHubX: 0,
+  snapHubY: 0,
+  snapHubR: 0,
+  hubTargetR: 48,
+  landscapeDots: [],
+  backRect: { x: 14, y: 14, w: 44, h: 44 },
+};
+
+function gfSmoothstep01(t) {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+}
+
+function gfEaseInOutCubic(t) {
+  const x = Math.max(0, Math.min(1, t));
+  return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
+}
+
+/** Dissolve autres points vite au début (contraste immédiat avec le paysage). */
+function gfFadeLandscapeAlpha(p) {
+  const u = Math.max(0, Math.min(1, p / GF_FADE_END));
+  return 1 - u * u * u;
+}
+
+function gfRoundRectPath(ctx, x, y, w, h, r) {
+  const rad = Math.min(r, w / 2, h / 2);
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, rad);
+    return;
+  }
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+
+function gfSkillNodeColor(skill, index) {
+  const hues = [268, 312, 200, 168, 32, 228, 145, 350];
+  let hsh = 0;
+  const str = String(skill);
+  for (let k = 0; k < str.length; k += 1) hsh = Math.imul(hsh ^ str.charCodeAt(k), 16777619);
+  const hue = hues[(Math.abs(hsh) + index) % hues.length];
+  return `hsl(${hue}, 68%, 52%)`;
+}
+
+function gfUpdateBackButtonLayout(width) {
+  galaxyFocus.backRect = { x: 14, y: 14, w: 44, h: 44 };
+}
+
+function gfBuildSkillNodes(skills, cx, cy, width, height) {
+  const capped = skills.slice(0, GALAXY_FOCUS_MAX_SKILLS);
+  const extra = skills.length - capped.length;
+  const labels = extra > 0 ? [...capped, `+${extra}`] : capped;
+  const n = labels.length;
+  const diskW = Math.max(72, Math.min(width * 0.38, 280));
+  const diskH = Math.max(72, Math.min(height * 0.34, 240));
+  const nodes = labels.map((name, index) => {
+    const idx = index + 1;
+    const golden = idx * 2.39996322972865332;
+    const normR = Math.sqrt(idx / (n + 1));
+    const tx = cx + Math.cos(golden) * normR * diskW;
+    const ty = cy + Math.sin(golden) * normR * diskH;
+    return {
+      name,
+      golden,
+      normR,
+      tx,
+      ty,
+      color: name.startsWith("+") ? "rgba(107, 94, 130, 0.75)" : gfSkillNodeColor(name, index),
+      isMore: name.startsWith("+"),
+    };
+  });
+  gfRelaxSkillNodes(nodes);
+  return nodes;
+}
+
+function gfRelaxSkillNodes(nodes) {
+  const minDist = 44;
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const dx = nodes[j].tx - nodes[i].tx;
+        const dy = nodes[j].ty - nodes[i].ty;
+        const dist = Math.hypot(dx, dy) || 1;
+        if (dist >= minDist) continue;
+        const push = (minDist - dist) * 0.42;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        nodes[i].tx -= ux * push;
+        nodes[i].ty -= uy * push;
+        nodes[j].tx += ux * push;
+        nodes[j].ty += uy * push;
+      }
+    }
+  }
+}
+
+function gfCanvasToLogic(event) {
+  const bounds = canvas.getBoundingClientRect();
+  const { width: logicW, height: logicH } = readCanvasCssSize();
+  let x = event.clientX - bounds.left;
+  let y = event.clientY - bounds.top;
+  if (bounds.width >= 2 && bounds.height >= 2) {
+    x = (x / bounds.width) * logicW;
+    y = (y / bounds.height) * logicH;
+  }
+  return { x, y };
+}
+
+function gfHitBackButton(x, y) {
+  const r = galaxyFocus.backRect;
+  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+}
+
+function gfRebuildSkillLayout() {
+  const member = galaxyFocus.member;
+  if (!member || !galaxyFocus.skillsSnapshot.length) return;
+  const { width, height } = readCanvasCssSize();
+  const cx = width / 2;
+  const cy = height / 2;
+  galaxyFocus.skillNodes = gfBuildSkillNodes(galaxyFocus.skillsSnapshot, cx, cy, width, height);
+}
+
+function gfSnapshotLandscapeDots(list, focusId, selected, hoveredId) {
+  return list
+    .filter((m) => m.entityId !== focusId)
+    .map((m) => ({
+      x: m.x,
+      y: m.y,
+      color: m.color,
+      r: memberDisplayRadius(m, selected, hoveredId),
+    }));
+}
+
+function gfApplyBodyClass() {
+  if (galaxyFocus.mode === "landscape") document.body.classList.remove("galaxy-person-focus");
+  else document.body.classList.add("galaxy-person-focus");
+}
+
+function startGalaxyPersonFocus(member) {
+  if (!member || galaxyFocus.mode !== "landscape") return;
+  const skills = memberSkillsList(member);
+  if (!skills.length) return;
+  const list = visibleMembers();
+  const sel = selectedMember(list);
+  const { width, height } = readCanvasCssSize();
+  const cx = width / 2;
+  const cy = height / 2;
+  galaxyFocus.mode = "enter";
+  galaxyFocus.memberId = member.entityId;
+  galaxyFocus.member = member;
+  galaxyFocus.transitionStart = performance.now();
+  galaxyFocus.skillsSnapshot = skills.slice();
+  galaxyFocus.snapHubX = member.x;
+  galaxyFocus.snapHubY = member.y;
+  galaxyFocus.snapHubR = memberDisplayRadius(member, sel, state.hoveredId);
+  galaxyFocus.hubTargetR = Math.min(56, Math.max(36, Math.min(width, height) * 0.085));
+  galaxyFocus.landscapeDots = gfSnapshotLandscapeDots(list, member.entityId, sel, state.hoveredId);
+  galaxyFocus.skillNodes = gfBuildSkillNodes(galaxyFocus.skillsSnapshot, cx, cy, width, height);
+  gfUpdateBackButtonLayout(width);
+  gfApplyBodyClass();
+  state.selectedId = member.entityId;
+  renderDetail(member);
+  renderRoster(activeMembers());
+}
+
+function requestGalaxyPersonExit() {
+  if (galaxyFocus.mode === "landscape" || galaxyFocus.mode === "exit") return;
+  galaxyFocus.mode = "exit";
+  galaxyFocus.transitionStart = performance.now();
+}
+
+function gfFinishExitToLandscape() {
+  galaxyFocus.mode = "landscape";
+  galaxyFocus.memberId = null;
+  galaxyFocus.member = null;
+  galaxyFocus.skillsSnapshot = [];
+  galaxyFocus.skillNodes = [];
+  galaxyFocus.landscapeDots = [];
+  gfApplyBodyClass();
+  const vis = visibleMembers();
+  const chosen = selectedMember(vis);
+  if (chosen) state.selectedId = chosen.entityId;
+  else state.selectedId = null;
+  snapSingleThemeVogelPositions(vis);
+  renderDetail(chosen);
+  renderRoster(activeMembers());
+}
+
+function gfLerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function gfDrawBackButton(ctx) {
+  const { x, y, w, h } = galaxyFocus.backRect;
+  ctx.save();
+  ctx.beginPath();
+  gfRoundRectPath(ctx, x, y, w, h, 12);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.strokeStyle = "rgba(165, 115, 241, 0.28)";
+  ctx.lineWidth = 1.2;
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(55, 48, 75, 0.65)";
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const cx = x + w * 0.52;
+  const cy = y + h / 2;
+  ctx.beginPath();
+  ctx.moveTo(cx + 5, cy - 7);
+  ctx.lineTo(cx - 4, cy);
+  ctx.lineTo(cx + 5, cy + 7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase) {
+  if (linksAlpha <= 0.02) return;
+  const hubEdge = hubR + 3;
+  nodes.forEach((node) => {
+    const dx = node.tx - hx;
+    const dy = node.ty - hy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist;
+    const uy = dy / dist;
+    const sx = hx + ux * hubEdge;
+    const sy = hy + uy * hubEdge;
+    const nr = node.isMore ? 5 : 5 + Math.min(6, String(node.name).length * 0.32);
+    const ex = node.tx - ux * nr;
+    const ey = node.ty - uy * nr;
+    const mx = (sx + ex) / 2 - uy * (dist * 0.08);
+    const my = (sy + ey) / 2 + ux * (dist * 0.08);
+    ctx.save();
+    ctx.globalAlpha = linksAlpha;
+    ctx.setLineDash([5, 8]);
+    ctx.lineDashOffset = dashPhase;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(mx, my, ex, ey);
+    ctx.strokeStyle = "rgba(116, 71, 245, 0.14)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(mx, my, ex, ey);
+    ctx.strokeStyle = "rgba(116, 71, 245, 0.32)";
+    ctx.lineWidth = 1.35;
+    ctx.stroke();
+    ctx.restore();
+  });
+  ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
+}
+
+function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
+  nodes.forEach((node, index) => {
+    const stagger = index * 0.045;
+    const a = Math.max(0, Math.min(1, (skillsAlpha - stagger) / (1 - stagger + 0.001)));
+    if (a <= 0.01) return;
+    const drift = galaxyFocus.mode === "person" ? Math.sin(now * 0.00055 + node.golden) * 2.2 : 0;
+    const x = node.tx + Math.cos(node.golden + spin) * drift;
+    const y = node.ty + Math.sin(node.golden + spin) * drift;
+    const nr = node.isMore ? 5 : 5 + Math.min(7, String(node.name).length * 0.38);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.fillStyle = node.color;
+    ctx.shadowBlur = 14 * a;
+    ctx.shadowColor = node.color;
+    ctx.arc(x, y, nr * (0.35 + 0.65 * Math.min(1, a * 1.4)), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.lineWidth = 1.1;
+    ctx.arc(x, y, nr, 0, Math.PI * 2);
+    ctx.stroke();
+    const label = truncateGalaxyLabel(node.name, 20);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = '600 10.5px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+    const ty = y + nr + 4;
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeText(label, x, ty);
+    ctx.fillStyle = "rgba(35, 31, 48, 0.9)";
+    ctx.fillText(label, x, ty);
+    ctx.restore();
+  });
+}
+
+function gfDrawCentralHub(ctx, member, hx, hy, hubR, initialsAlpha) {
+  const hubC = member.color || "#7447f5";
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(hx, hy, hubR + 12, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(hx, hy, hubR + 3, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = hubC;
+  ctx.shadowBlur = 28;
+  ctx.shadowColor = `${hubC}88`;
+  ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(hx, hy, hubR - 4, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.fill();
+  const initials = (member.initials || "?").slice(0, 3);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = '800 14px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+  ctx.globalAlpha = initialsAlpha;
+  ctx.fillStyle = "rgba(15, 12, 24, 0.88)";
+  ctx.fillText(initials, hx, hy);
+  ctx.restore();
+}
+
+function gfCurrentHubGeometry(now, width, height) {
+  const cx = width / 2;
+  const cy = height / 2;
+  if (galaxyFocus.mode === "person") {
+    const breath = Math.sin(now * 0.0007) * 0.06;
+    return { hx: cx, hy: cy, hubR: galaxyFocus.hubTargetR * (1 + breath), hubGrowT: 1 };
+  }
+  if (galaxyFocus.mode === "enter") {
+    const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
+    const hubPosT = gfEaseInOutCubic(Math.min(1, p / GF_MOVE_END));
+    const hubGrowT = gfEaseInOutCubic(Math.max(0, Math.min(1, (p - 0.04) / (GF_GROW_END - 0.04))));
+    return {
+      hx: gfLerp(galaxyFocus.snapHubX, cx, hubPosT),
+      hy: gfLerp(galaxyFocus.snapHubY, cy, hubPosT),
+      hubR: gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, hubGrowT),
+      hubGrowT,
+    };
+  }
+  if (galaxyFocus.mode === "exit") {
+    const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_EXIT_MS);
+    const q = 1 - p;
+    const hubPosT = gfEaseInOutCubic(q);
+    const hubGrowT = gfEaseInOutCubic(q);
+    return {
+      hx: gfLerp(galaxyFocus.snapHubX, cx, hubPosT),
+      hy: gfLerp(galaxyFocus.snapHubY, cy, hubPosT),
+      hubR: gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, hubGrowT),
+      hubGrowT,
+    };
+  }
+  return { hx: cx, hy: cy, hubR: galaxyFocus.hubTargetR, hubGrowT: 1 };
+}
+
+function gfGalaxyPointerTargets(x, y, now, width, height) {
+  if (gfHitBackButton(x, y)) return "back";
+  const geo = gfCurrentHubGeometry(now, width, height);
+  const { hx, hy, hubR } = geo;
+  if (Math.hypot(x - hx, y - hy) <= hubR + 16) return "hub";
+  const spin = now * 0.00004;
+  for (let i = 0; i < galaxyFocus.skillNodes.length; i += 1) {
+    const node = galaxyFocus.skillNodes[i];
+    const drift = galaxyFocus.mode === "person" ? Math.sin(now * 0.00055 + node.golden) * 2.2 : 0;
+    const nx = node.tx + Math.cos(node.golden + spin) * drift;
+    const ny = node.ty + Math.sin(node.golden + spin) * drift;
+    const nr = node.isMore ? 5 : 5 + Math.min(7, String(node.name).length * 0.38);
+    if (Math.hypot(x - nx, y - ny) <= nr + 12) return "skill";
+  }
+  return "empty";
+}
+
+function drawGalaxyPersonFocus(width, height, now) {
+  const member = galaxyFocus.member;
+  if (!member) {
+    gfFinishExitToLandscape();
+    return;
+  }
+
+  const backgroundGlow = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height * 0.52);
+  backgroundGlow.addColorStop(0, "rgba(182, 128, 255, 0.1)");
+  backgroundGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = backgroundGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  const spin = now * 0.00004;
+  const geo = gfCurrentHubGeometry(now, width, height);
+  const { hx, hy, hubR, hubGrowT } = geo;
+
+  if (galaxyFocus.mode === "enter") {
+    const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
+    const fadeLand = gfFadeLandscapeAlpha(p);
+    const skillsT = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.28) / (GF_SKILLS_END - 0.28))));
+    const linksT = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.44) / (1 - 0.44))));
+
+    const wash = Math.min(1, p / 0.07) * (1 - Math.min(1, p / 0.35));
+    if (wash > 0.02) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.14 * wash})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.save();
+    ctx.globalAlpha = fadeLand;
+    galaxyFocus.landscapeDots.forEach((d) => {
+      ctx.beginPath();
+      ctx.fillStyle = `${d.color}cc`;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = d.color;
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+    ctx.restore();
+
+    gfDrawCentralHub(ctx, member, hx, hy, hubR, gfSmoothstep01(hubGrowT * 1.05));
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.04);
+    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
+    gfDrawBackButton(ctx);
+
+    if (p >= 1) {
+      galaxyFocus.mode = "person";
+      galaxyFocus.transitionStart = now;
+    }
+    return;
+  }
+
+  if (galaxyFocus.mode === "person") {
+    gfDrawCentralHub(ctx, member, hx, hy, hubR, 1);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.04);
+    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now);
+    gfDrawBackButton(ctx);
+    return;
+  }
+
+  if (galaxyFocus.mode === "exit") {
+    const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_EXIT_MS);
+    const q = 1 - p;
+    const fadeLand = gfSmoothstep01(p);
+    const skillsT = gfSmoothstep01(q * 1.05);
+    const linksT = gfSmoothstep01(q * 1.1);
+
+    ctx.save();
+    ctx.globalAlpha = fadeLand * 0.95;
+    galaxyFocus.landscapeDots.forEach((d) => {
+      ctx.beginPath();
+      ctx.fillStyle = `${d.color}cc`;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = d.color;
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+    ctx.restore();
+
+    gfDrawCentralHub(ctx, member, hx, hy, hubR, gfSmoothstep01(hubGrowT));
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.04);
+    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
+    gfDrawBackButton(ctx);
+
+    if (p >= 1) gfFinishExitToLandscape();
+  }
+}
+
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
 const BADGE_KEYS = ["blue", "green", "red", "yellow"];
 const BADGE_META = {
@@ -1182,7 +1667,21 @@ function snapSingleThemeVogelPositions(list) {
 function drawFrame() {
   resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
+  const now = performance.now();
   const list = visibleMembers();
+
+  if (galaxyFocus.mode !== "landscape") {
+    const stillVisible = galaxyFocus.memberId && list.some((m) => m.entityId === galaxyFocus.memberId);
+    if (!stillVisible) {
+      gfFinishExitToLandscape();
+    } else {
+      ctx.clearRect(0, 0, width, height);
+      drawGalaxyPersonFocus(width, height, now);
+      requestAnimationFrame(drawFrame);
+      return;
+    }
+  }
+
   const selected = selectedMember(list);
   const hoveredId = state.hoveredId;
   const anchors = anchorMap(list, width, height);
@@ -1234,7 +1733,7 @@ function drawFrame() {
   /** Same soft follow as "All" so category view stays alive, not glued to static Vogel targets. */
   const layoutPull = 0.012;
   const layoutDamp = 0.92;
-  const angleDrift = performance.now() * 0.00008;
+  const angleDrift = now * 0.00008;
 
   list.forEach((member, index) => {
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
@@ -1381,6 +1880,7 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 }
 
 function syncUI() {
+  if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
   if (__galaxyThemeForReset.theme !== state.theme) {
     __galaxyThemeForReset.theme = state.theme;
     members.forEach((m) => {
@@ -1412,6 +1912,7 @@ if (canvasWrap && typeof ResizeObserver !== "undefined") {
   const ro = new ResizeObserver(() => {
     resizeCanvas();
     snapSingleThemeVogelPositions(visibleMembers());
+    if (galaxyFocus.mode !== "landscape") gfRebuildSkillLayout();
   });
   ro.observe(canvasWrap);
 }
@@ -1487,6 +1988,13 @@ if (rosterCard) {
 }
 
 canvas.addEventListener("mousemove", (event) => {
+  if (galaxyFocus.mode !== "landscape") {
+    const { x, y } = gfCanvasToLogic(event);
+    const { width, height } = readCanvasCssSize();
+    const zone = gfGalaxyPointerTargets(x, y, performance.now(), width, height);
+    canvas.style.cursor = zone === "empty" ? "default" : "pointer";
+    return;
+  }
   const member = pickMemberFromPointer(event);
   state.hoveredId = member?.entityId || null;
   canvas.style.cursor = member ? "pointer" : "default";
@@ -1498,11 +2006,36 @@ canvas.addEventListener("mouseleave", () => {
 });
 
 canvas.addEventListener("click", (event) => {
+  const { x, y } = gfCanvasToLogic(event);
+  const { width, height } = readCanvasCssSize();
+  const now = performance.now();
+
+  if (galaxyFocus.mode !== "landscape") {
+    const zone = gfGalaxyPointerTargets(x, y, now, width, height);
+    if (zone === "back") {
+      requestGalaxyPersonExit();
+      return;
+    }
+    if (zone === "hub" || zone === "skill") return;
+    requestGalaxyPersonExit();
+    return;
+  }
+
   const member = pickMemberFromPointer(event);
   if (!member) return;
+  if (memberSkillsList(member).length > 0) {
+    startGalaxyPersonFocus(member);
+    return;
+  }
   state.selectedId = member.entityId;
   renderDetail(member);
   renderRoster(activeMembers());
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (galaxyFocus.mode === "landscape") return;
+  requestGalaxyPersonExit();
 });
 
 if (rosterGrid) {
@@ -1530,6 +2063,7 @@ if (rosterGrid) {
     if (event.target.closest("a")) return;
     const card = event.target.closest("[data-entity-id]");
     if (!card) return;
+    if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
     state.selectedId = card.dataset.entityId;
     renderDetail(selectedMember(visibleMembers()));
     renderRoster(activeMembers());
@@ -1557,4 +2091,5 @@ if (detailCard) {
 
 window.addEventListener("resize", () => {
   resizeCanvas();
+  if (galaxyFocus.mode !== "landscape") gfRebuildSkillLayout();
 });
