@@ -451,33 +451,6 @@ h1 {
   align-items: stretch;
 }
 
-@media (min-width: 1121px) {
-  .visual-grid {
-    grid-template-columns: minmax(0, 1.42fr) minmax(300px, 0.58fr);
-    gap: 22px;
-  }
-
-  .galaxy-card,
-  .detail-card {
-    display: flex;
-    flex-direction: column;
-    min-height: clamp(560px, 70vh, 940px);
-  }
-
-  .galaxy-card .canvas-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    height: auto;
-  }
-
-  .detail-card .detail-panel-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
 .galaxy-card {
   display: flex;
   flex-direction: column;
@@ -500,11 +473,6 @@ h1 {
 }
 
 .galaxy-card > .card-header {
-  justify-content: flex-start;
-  align-items: flex-start;
-}
-
-.card-header--detail {
   justify-content: flex-start;
   align-items: flex-start;
 }
@@ -620,7 +588,7 @@ h1 {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: clamp(560px, 65vh, 920px);
+  height: clamp(640px, 78vh, 980px);
   background:
     radial-gradient(circle at 20% 12%, rgba(176, 123, 255, 0.16), transparent 24%),
     radial-gradient(circle at 80% 18%, rgba(113, 231, 255, 0.16), transparent 24%),
@@ -638,13 +606,9 @@ h1 {
 
 .detail-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
-#detail-panel.detail-panel-body,
-.detail-panel-body {
+#detail-panel {
   display: grid;
   gap: 18px;
 }

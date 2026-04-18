@@ -971,7 +971,7 @@ function renderDetail(member) {
             <span class="theme-dot" style="color:${member.color}; background:${member.color};"></span>
             <span>${member.theme}</span>
           </div>
-          <h3 class="detail-name">${member.name}</h3>
+          <h2 class="detail-name">${member.name}</h2>
           <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
