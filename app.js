@@ -281,6 +281,18 @@ function gfEaseInOutCubic(t) {
   return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 }
 
+function gfEaseOutCubic(t) {
+  const x = Math.max(0, Math.min(1, t));
+  return 1 - (1 - x) ** 3;
+}
+
+/** Overshoot modéré (Penner-style), 0→0 et 1→1. */
+function gfEaseOutBack(t, c1 = 1.525) {
+  const x = Math.max(0, Math.min(1, t));
+  const c3 = c1 + 1;
+  return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2;
+}
+
 /** Dissolve autres points vite au début (contraste immédiat avec le paysage). */
 function gfFadeLandscapeAlpha(p) {
   const u = Math.max(0, Math.min(1, p / GF_FADE_END));
@@ -399,11 +411,6 @@ function gfSnapshotLandscapeDots(list, focusId, selected, hoveredId) {
     }));
 }
 
-function gfApplyBodyClass() {
-  if (galaxyFocus.mode === "landscape") document.body.classList.remove("galaxy-person-focus");
-  else document.body.classList.add("galaxy-person-focus");
-}
-
 function startGalaxyPersonFocus(member) {
   if (!member || galaxyFocus.mode !== "landscape") return;
   const skills = memberSkillsList(member);
@@ -421,14 +428,21 @@ function startGalaxyPersonFocus(member) {
   galaxyFocus.snapHubX = member.x;
   galaxyFocus.snapHubY = member.y;
   galaxyFocus.snapHubR = memberDisplayRadius(member, sel, state.hoveredId);
-  galaxyFocus.hubTargetR = Math.min(56, Math.max(36, Math.min(width, height) * 0.085));
+  const dim = Math.min(width, height);
+  const nameLen = String(member.name || "").length;
+  galaxyFocus.hubTargetR = Math.min(
+    84,
+    Math.max(40, dim * 0.078 + Math.min(22, Math.max(0, nameLen - 14) * 1.35)),
+  );
   galaxyFocus.landscapeDots = gfSnapshotLandscapeDots(list, member.entityId, sel, state.hoveredId);
   galaxyFocus.skillNodes = gfBuildSkillNodes(galaxyFocus.skillsSnapshot, cx, cy, width, height);
   gfUpdateBackButtonLayout(width);
-  gfApplyBodyClass();
   state.selectedId = member.entityId;
   renderDetail(member);
   renderRoster(activeMembers());
+  requestAnimationFrame(() => {
+    detailCard?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
 }
 
 function requestGalaxyPersonExit() {
@@ -444,7 +458,6 @@ function gfFinishExitToLandscape() {
   galaxyFocus.skillsSnapshot = [];
   galaxyFocus.skillNodes = [];
   galaxyFocus.landscapeDots = [];
-  gfApplyBodyClass();
   const vis = visibleMembers();
   const chosen = selectedMember(vis);
   if (chosen) state.selectedId = chosen.entityId;
@@ -522,9 +535,11 @@ function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase) {
 
 function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
   nodes.forEach((node, index) => {
-    const stagger = index * 0.045;
-    const a = Math.max(0, Math.min(1, (skillsAlpha - stagger) / (1 - stagger + 0.001)));
-    if (a <= 0.01) return;
+    const stagger = index * 0.038;
+    const rawA = Math.max(0, Math.min(1, (skillsAlpha - stagger) / (1 - stagger + 0.001)));
+    if (rawA <= 0.01) return;
+    const a = gfEaseOutCubic(rawA);
+    const pop = Math.min(1, gfEaseOutBack(Math.min(1, rawA * 1.12), 1.35));
     const drift = galaxyFocus.mode === "person" ? Math.sin(now * 0.00055 + node.golden) * 2.2 : 0;
     const x = node.tx + Math.cos(node.golden + spin) * drift;
     const y = node.ty + Math.sin(node.golden + spin) * drift;
@@ -535,7 +550,7 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
     ctx.fillStyle = node.color;
     ctx.shadowBlur = 14 * a;
     ctx.shadowColor = node.color;
-    ctx.arc(x, y, nr * (0.35 + 0.65 * Math.min(1, a * 1.4)), 0, Math.PI * 2);
+    ctx.arc(x, y, nr * (0.34 + 0.66 * pop), 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.beginPath();
@@ -558,7 +573,66 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
   });
 }
 
-function gfDrawCentralHub(ctx, member, hx, hy, hubR, initialsAlpha) {
+function gfFitHubNameLines(ctx, name, maxW, maxH) {
+  const clean = String(name || "—").trim() || "—";
+  for (let fontPx = 12.5; fontPx >= 7; fontPx -= 0.5) {
+    ctx.font = `700 ${fontPx}px system-ui, "Avenir Next", "Segoe UI", sans-serif`;
+    const words = clean.split(/\s+/).filter(Boolean);
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const next = cur ? `${cur} ${w}` : w;
+      if (ctx.measureText(next).width <= maxW) cur = next;
+      else {
+        if (cur) lines.push(cur);
+        if (ctx.measureText(w).width > maxW) {
+          let s = w;
+          while (s.length > 1 && ctx.measureText(`${s.slice(0, -1)}…`).width > maxW) s = s.slice(0, -1);
+          cur = `${s}…`;
+        } else cur = w;
+      }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > 3) continue;
+    const lineHeight = fontPx * 1.22;
+    if (lines.length * lineHeight <= maxH) return { lines, fontPx, lineHeight };
+  }
+  ctx.font = '700 7px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+  return { lines: [truncateGalaxyLabel(clean, 30)], fontPx: 7, lineHeight: 9 };
+}
+
+function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
+  if (labelAlpha <= 0.02) return;
+  const padX = 11;
+  const padY = 10;
+  const maxW = Math.max(40, hubR * 2 - padX * 2);
+  const maxH = Math.max(28, hubR * 2 - padY * 2);
+  const { lines, fontPx, lineHeight } = gfFitHubNameLines(ctx, member.name, maxW, maxH);
+  const totalH = lines.length * lineHeight;
+  const yStart = hy - totalH / 2 + lineHeight * 0.72;
+  const pop = 0.9 + 0.1 * Math.min(1, Math.max(0, labelPop));
+  ctx.save();
+  ctx.globalAlpha = labelAlpha;
+  ctx.translate(hx, hy);
+  ctx.scale(pop, pop);
+  ctx.translate(-hx, -hy);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${fontPx}px system-ui, "Avenir Next", "Segoe UI", sans-serif`;
+  ctx.lineJoin = "round";
+  const sw = Math.max(2.2, fontPx * 0.26);
+  lines.forEach((line, i) => {
+    const ly = yStart + i * lineHeight;
+    ctx.lineWidth = sw;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.strokeText(line, hx, ly);
+    ctx.fillStyle = "rgba(18, 14, 28, 0.92)";
+    ctx.fillText(line, hx, ly);
+  });
+  ctx.restore();
+}
+
+function gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   const hubC = member.color || "#7447f5";
   ctx.save();
   ctx.beginPath();
@@ -581,13 +655,7 @@ function gfDrawCentralHub(ctx, member, hx, hy, hubR, initialsAlpha) {
   ctx.arc(hx, hy, hubR - 4, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
   ctx.fill();
-  const initials = (member.initials || "?").slice(0, 3);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = '800 14px system-ui, "Avenir Next", "Segoe UI", sans-serif';
-  ctx.globalAlpha = initialsAlpha;
-  ctx.fillStyle = "rgba(15, 12, 24, 0.88)";
-  ctx.fillText(initials, hx, hy);
+  gfDrawHubName(ctx, member, hx, hy, hubR - 3, labelAlpha, labelPop);
   ctx.restore();
 }
 
@@ -600,25 +668,29 @@ function gfCurrentHubGeometry(now, width, height) {
   }
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
-    const hubPosT = gfEaseInOutCubic(Math.min(1, p / GF_MOVE_END));
-    const hubGrowT = gfEaseInOutCubic(Math.max(0, Math.min(1, (p - 0.04) / (GF_GROW_END - 0.04))));
+    const uMove = Math.min(1, p / GF_MOVE_END);
+    const hubPosT = gfEaseInOutCubic(uMove) * 0.72 + gfEaseOutCubic(uMove) * 0.28;
+    const growRaw = gfEaseInOutCubic(Math.max(0, Math.min(1, (p - 0.02) / (GF_GROW_END - 0.02))));
+    const growEased = Math.min(1.08, gfEaseOutBack(growRaw, 1.65));
+    const hubR = gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, growEased);
     return {
       hx: gfLerp(galaxyFocus.snapHubX, cx, hubPosT),
       hy: gfLerp(galaxyFocus.snapHubY, cy, hubPosT),
-      hubR: gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, hubGrowT),
-      hubGrowT,
+      hubR,
+      hubGrowT: growRaw,
     };
   }
   if (galaxyFocus.mode === "exit") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_EXIT_MS);
     const q = 1 - p;
-    const hubPosT = gfEaseInOutCubic(q);
-    const hubGrowT = gfEaseInOutCubic(q);
+    const hubPosT = gfEaseInOutCubic(q) * 0.65 + gfEaseOutCubic(q) * 0.35;
+    const shrinkT = gfEaseOutCubic(q);
+    const hubR = gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, shrinkT);
     return {
       hx: gfLerp(galaxyFocus.snapHubX, cx, hubPosT),
       hy: gfLerp(galaxyFocus.snapHubY, cy, hubPosT),
-      hubR: gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, hubGrowT),
-      hubGrowT,
+      hubR,
+      hubGrowT: shrinkT,
     };
   }
   return { hx: cx, hy: cy, hubR: galaxyFocus.hubTargetR, hubGrowT: 1 };
@@ -661,12 +733,15 @@ function drawGalaxyPersonFocus(width, height, now) {
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
     const fadeLand = gfFadeLandscapeAlpha(p);
-    const skillsT = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.28) / (GF_SKILLS_END - 0.28))));
-    const linksT = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.44) / (1 - 0.44))));
+    const skillsT = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.22) / (GF_SKILLS_END - 0.22))));
+    const linksT = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.38) / (1 - 0.38))));
 
-    const wash = Math.min(1, p / 0.07) * (1 - Math.min(1, p / 0.35));
+    const labelAlpha = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.24) / 0.4)));
+    const labelPop = gfEaseOutCubic(Math.max(0, Math.min(1, (p - 0.26) / 0.36)));
+
+    const wash = Math.min(1, p / 0.08) * (1 - Math.min(1, p / 0.38));
     if (wash > 0.02) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.14 * wash})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.12 * wash})`;
       ctx.fillRect(0, 0, width, height);
     }
 
@@ -683,8 +758,8 @@ function drawGalaxyPersonFocus(width, height, now) {
     });
     ctx.restore();
 
-    gfDrawCentralHub(ctx, member, hx, hy, hubR, gfSmoothstep01(hubGrowT * 1.05));
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.04);
+    gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.055);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
     gfDrawBackButton(ctx);
 
@@ -696,8 +771,8 @@ function drawGalaxyPersonFocus(width, height, now) {
   }
 
   if (galaxyFocus.mode === "person") {
-    gfDrawCentralHub(ctx, member, hx, hy, hubR, 1);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.04);
+    gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.055);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now);
     gfDrawBackButton(ctx);
     return;
@@ -707,8 +782,10 @@ function drawGalaxyPersonFocus(width, height, now) {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_EXIT_MS);
     const q = 1 - p;
     const fadeLand = gfSmoothstep01(p);
-    const skillsT = gfSmoothstep01(q * 1.05);
-    const linksT = gfSmoothstep01(q * 1.1);
+    const skillsT = gfEaseOutCubic(Math.max(0, q * 1.08));
+    const linksT = gfEaseOutCubic(Math.max(0, q * 1.12));
+    const labelAlpha = gfSmoothstep01(Math.max(0, q * 1.05));
+    const labelPop = gfSmoothstep01(Math.max(0, q * 1.02));
 
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.95;
@@ -723,8 +800,8 @@ function drawGalaxyPersonFocus(width, height, now) {
     });
     ctx.restore();
 
-    gfDrawCentralHub(ctx, member, hx, hy, hubR, gfSmoothstep01(hubGrowT));
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.04);
+    gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.055);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
     gfDrawBackButton(ctx);
 
