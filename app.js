@@ -967,25 +967,24 @@ function renderDetail(member) {
           ${renderAvatar(member, "avatar-large")}
         </div>
         <div class="detail-heading">
-      <div class="detail-theme">
-        <span class="theme-dot" style="color:${member.color}; background:${member.color};"></span>
-        <span>${member.theme}</span>
-      </div>
-      <h2 class="detail-name">${member.name}</h2>
-      <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
-      ${renderDetailSkillsSection(member)}
-      <div class="detail-markers" data-entity-id="${member.entityId}">
-        <div class="detail-markers-label">Your rating and tag</div>
-        <div class="detail-markers-controls">
-          ${renderStarRow(member.entityId, false)}
-          ${renderPastilleRow(member.entityId, false)}
-        </div>
-        <p class="detail-markers-hint">Stored on this device. Use Export JSON or cloud sign-in for a permanent backup.</p>
-      </div>
+          <div class="detail-theme">
+            <span class="theme-dot" style="color:${member.color}; background:${member.color};"></span>
+            <span>${member.theme}</span>
+          </div>
+          <h3 class="detail-name">${member.name}</h3>
+          <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
+          ${renderDetailSkillsSection(member)}
+          <div class="detail-markers" data-entity-id="${member.entityId}">
+            <div class="detail-markers-label">Your rating and tag</div>
+            <div class="detail-markers-controls">
+              ${renderStarRow(member.entityId, false)}
+              ${renderPastilleRow(member.entityId, false)}
+            </div>
+            <p class="detail-markers-hint">Stored on this device. Use Export JSON or cloud sign-in for a permanent backup.</p>
+          </div>
         </div>
       </div>
     </div>
-
     ${renderDetailConnect(member)}
   `;
 }

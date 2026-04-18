@@ -108,9 +108,17 @@ body::after {
   pointer-events: none;
 }
 
-.eyebrow,
-.card-kicker {
+.eyebrow {
   margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.78rem;
+  color: #b168ff;
+  font-weight: 700;
+}
+
+.card-kicker {
+  margin: 0 0 8px;
   text-transform: uppercase;
   letter-spacing: 0.18em;
   font-size: 0.78rem;
@@ -123,7 +131,8 @@ h2,
 h3,
 .theme-pill,
 .detail-name,
-.roster-name {
+.roster-name,
+.detail-section-title {
   font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
 }
 
@@ -437,8 +446,36 @@ h1 {
 .visual-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 24px;
+  gap: 22px;
   margin-bottom: 24px;
+  align-items: stretch;
+}
+
+@media (min-width: 1121px) {
+  .visual-grid {
+    grid-template-columns: minmax(0, 1.42fr) minmax(300px, 0.58fr);
+    gap: 22px;
+  }
+
+  .galaxy-card,
+  .detail-card {
+    display: flex;
+    flex-direction: column;
+    min-height: clamp(560px, 70vh, 940px);
+  }
+
+  .galaxy-card .canvas-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+  }
+
+  .detail-card .detail-panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .galaxy-card {
@@ -462,8 +499,18 @@ h1 {
   margin-bottom: 18px;
 }
 
+.galaxy-card > .card-header {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.card-header--detail {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
 .card-header.slim {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .card-header h2 {
@@ -477,7 +524,7 @@ h1 {
   display: grid;
   grid-template-columns: minmax(240px, 0.72fr) minmax(420px, 1.28fr);
   gap: 24px;
-  align-items: end;
+  align-items: start;
   margin-bottom: 24px;
 }
 
@@ -486,11 +533,15 @@ h1 {
   gap: 10px;
   align-self: stretch;
   align-content: start;
-  padding: 6px 4px 0 0;
+  padding: 0;
 }
 
 .roster-intro h2 {
   margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
 }
 
 .roster-lead {
@@ -587,12 +638,15 @@ h1 {
 
 .detail-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-#detail-panel {
+#detail-panel.detail-panel-body,
+.detail-panel-body {
   display: grid;
   gap: 18px;
-  min-height: 100%;
 }
 
 .detail-top {
@@ -660,7 +714,6 @@ h1 {
 
 .detail-section-title {
   margin: 0 0 10px;
-  font-family: inherit;
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.18em;
