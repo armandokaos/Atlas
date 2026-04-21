@@ -281,9 +281,9 @@ const __galaxySkillFreq = (() => {
   return m;
 })();
 
-/** Every skill string seen ≥1 time on loaded profiles (Skills galaxy clusters), most frequent first. */
+/** Skills galaxy: only skills shared by ≥2 loaded profiles (hides singletons / bad zeros in pills). */
 const GALAXY_TOP_SKILL_KEYS = [...__galaxySkillFreq.entries()]
-  .filter(([, count]) => count >= 1)
+  .filter(([, count]) => count >= 2)
   .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   .map(([k]) => k);
 
@@ -312,13 +312,18 @@ const members = membersSourceFiltered.map((member, index) => {
   const skills = normalizeMemberSkills(member.skills);
   let skillClusterKey = GALAXY_SKILL_OTHER;
   if (GALAXY_TOP_SKILL_KEYS.length) {
+    let bestKey = null;
+    let bestCount = -1;
     for (const s of skills) {
       const k = String(s).trim().toLowerCase();
-      if (GALAXY_TOP_SKILL_KEYS.includes(k)) {
-        skillClusterKey = k;
-        break;
+      if (!GALAXY_TOP_SKILL_KEYS.includes(k)) continue;
+      const c = __galaxySkillFreq.get(k) || 0;
+      if (c > bestCount || (c === bestCount && bestKey !== null && k.localeCompare(bestKey) < 0)) {
+        bestCount = c;
+        bestKey = k;
       }
     }
+    if (bestKey !== null) skillClusterKey = bestKey;
   }
   return {
     isBoss: member.name === BOSS_NAME,
@@ -402,7 +407,7 @@ const state = {
   query: "",
   theme: "all",
   orgGroup: "all",
-  /** Galaxy layout: `category` (theme), `team` (org), `skills` (every skill seen ≥1× on loaded profiles). */
+  /** Galaxy layout: `category` (theme), `team` (org), `skills` (skills with ≥2 profiles in loaded data). */
   galaxyViewMode: "category",
   /** When `galaxyViewMode === "skills"`, which skill cluster is emphasized (matches `skillClusterKey`). */
   skillGalaxy: "all",
