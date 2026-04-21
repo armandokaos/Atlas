@@ -48,19 +48,11 @@ const ORG_GROUP_RAW_SPECS = [
   {
     key: "curators-elite",
     label: "Curators Elite",
-    names: [
-      "Iris",
-      "Kevin",
-      "Kevin Primicerio",
-      "MaximVL",
-      "Thomas Freestone",
-      "Federico Sendra",
-      "Victor Amigo",
-    ],
+    names: [],
   },
-  { key: "curators-green", label: "Curators (green list)", names: [] },
-  { key: "curators-red", label: "Curators (red list)", names: [] },
-  { key: "curators-yellow", label: "Curators (yellow list)", names: [] },
+  { key: "curators-green", label: "Curators green", names: [] },
+  { key: "curators-red", label: "Curators Red", names: [] },
+  { key: "curators-yellow", label: "Curators yellow", names: [] },
 ];
 
 const ORG_GROUP_SPECS = ORG_GROUP_RAW_SPECS.map((row) => ({
@@ -90,11 +82,18 @@ const ORG_GROUP_DOT_COLORS = {
   "geo-core": "#0ea5e9",
   "geo-content": "#8b5cf6",
   "geo-dev": "#6366f1",
-  "curators-elite": "#ca8a04",
+  "curators-elite": "#db2777",
   "curators-green": "#16a34a",
   "curators-red": "#dc2626",
   "curators-yellow": "#ca8a04",
   curators: "#64748b",
+};
+
+const BADGE_TO_ORG_GROUP = {
+  green: "curators-green",
+  red: "curators-red",
+  yellow: "curators-yellow",
+  pink: "curators-elite",
 };
 
 function resolveOrgGroupKey(displayName) {
@@ -420,8 +419,26 @@ const state = {
   phase: 0,
 };
 
+function memberOrgGroupKey(member) {
+  const fromBadge = BADGE_TO_ORG_GROUP[getPersonalBadge(member.entityId)];
+  if (fromBadge) return fromBadge;
+  return member.orgGroup || "curators";
+}
+
+function memberOrgGroupLabel(member) {
+  return ORG_GROUP_LABEL_BY_KEY[memberOrgGroupKey(member)] || "Curators";
+}
+
+function memberIsHiddenByTag(member) {
+  return getPersonalBadge(member.entityId) === "black";
+}
+
+function uiMembers() {
+  return members.filter((member) => !memberIsHiddenByTag(member));
+}
+
 function getGalaxyClusterKey(member) {
-  if (state.galaxyViewMode === "team") return member.orgGroup;
+  if (state.galaxyViewMode === "team") return memberOrgGroupKey(member);
   if (state.galaxyViewMode === "skills") return member.skillClusterKey;
   return member.theme;
 }
@@ -470,7 +487,7 @@ function isGalaxyClusterFocus() {
 function memberIsGalaxyClusterFocused(member) {
   if (!isGalaxyClusterFocus()) return false;
   if (state.galaxyViewMode === "category") return member.theme === state.theme;
-  if (state.galaxyViewMode === "team") return member.orgGroup === state.orgGroup;
+  if (state.galaxyViewMode === "team") return memberOrgGroupKey(member) === state.orgGroup;
   return member.skillClusterKey === state.skillGalaxy;
 }
 
@@ -479,7 +496,7 @@ function galaxyMemberBaseColor(member) {
   if (tag) return BADGE_META[tag].hex;
   if (member.isBoss) return BOSS_COLOR;
   if (state.galaxyViewMode === "skills") return galaxySkillHex(member.skillClusterKey);
-  if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[member.orgGroup] || "#94A3B8";
+  if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[memberOrgGroupKey(member)] || "#94A3B8";
   return member.color;
 }
 
@@ -1084,7 +1101,8 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const BADGE_KEYS = ["blue", "purple", "pink", "red", "green", "yellow", "orange"];
+const DEFAULT_MARKS_JSON_URL = "./geo-atlas-marks-2026-04-21-2.json";
+const BADGE_KEYS = ["blue", "purple", "pink", "red", "green", "yellow", "orange", "black"];
 const BADGE_META = {
   blue: { label: "Core team", hex: "#2563eb" },
   purple: { label: "Content team", hex: "#9333ea" },
@@ -1093,6 +1111,7 @@ const BADGE_META = {
   green: { label: "Curators green", hex: "#16a34a" },
   yellow: { label: "Curators yellow", hex: "#ca8a04" },
   orange: { label: "Curators orange", hex: "#ea580c" },
+  black: { label: "Hidden", hex: "#171717" },
 };
 
 const personalMarks = { ratings: {}, badges: {} };
@@ -1126,6 +1145,18 @@ function savePersonalMarks() {
     );
   } catch {
     /* quota or private mode */
+  }
+}
+
+async function loadBundledMarks() {
+  try {
+    const res = await fetch(DEFAULT_MARKS_JSON_URL, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    mergeImportedMarks(data);
+    savePersonalMarks();
+  } catch {
+    /* optional seed file; ignore if unavailable */
   }
 }
 
@@ -1552,15 +1583,15 @@ function relativeDensity(member) {
 function memberMatchesGalaxyRollupFilters(member) {
   const query = state.query.trim().toLowerCase();
   const matchTheme = state.theme === "all" || member.theme === state.theme;
-  const matchOrg = state.orgGroup === "all" || member.orgGroup === state.orgGroup;
+  const matchOrg = state.orgGroup === "all" || memberOrgGroupKey(member) === state.orgGroup;
   const skillsHay = memberSkillsList(member).join(" ");
-  const haystack = `${member.name} ${member.description} ${member.theme} ${member.orgGroupLabel} ${skillsHay}`.toLowerCase();
+  const haystack = `${member.name} ${member.description} ${member.theme} ${memberOrgGroupLabel(member)} ${skillsHay}`.toLowerCase();
   const matchQuery = !query || haystack.includes(query);
   return matchTheme && matchOrg && matchQuery;
 }
 
 function activeMembers() {
-  return members.filter((member) => {
+  return uiMembers().filter((member) => {
     if (!memberMatchesGalaxyRollupFilters(member)) return false;
     const matchSkillGalaxy =
       state.galaxyViewMode !== "skills" ||
@@ -1591,7 +1622,7 @@ function visibleMembers() {
   return applyPersonalFilters(spotlightMembers(activeMembers()));
 }
 
-function selectedMember(list = members) {
+function selectedMember(list = uiMembers()) {
   if (!list.length) return null;
   const found = list.find((member) => member.entityId === state.selectedId);
   return found || list[0];
@@ -1669,8 +1700,12 @@ function renderSpotlightFilters(list) {
 
 function renderThemePillsInto(container, compact) {
   if (!container) return;
-  const counts = memberSummary.themeCounts;
-  const total = memberSummary.totalMembers;
+  const source = uiMembers();
+  const counts = source.reduce((acc, member) => {
+    acc[member.theme] = (acc[member.theme] || 0) + 1;
+    return acc;
+  }, {});
+  const total = source.length;
   const pills = [
     {
       key: "all",
@@ -1707,12 +1742,14 @@ function renderThemePillsInto(container, compact) {
 function renderOrgGroupPillsInto(container, compact) {
   if (!container) return;
   const counts = new Map();
-  members.forEach((m) => {
-    counts.set(m.orgGroup, (counts.get(m.orgGroup) || 0) + 1);
+  const source = uiMembers();
+  source.forEach((m) => {
+    const key = memberOrgGroupKey(m);
+    counts.set(key, (counts.get(key) || 0) + 1);
   });
   const pills = ORG_GROUP_PILL_ORDER.map((key) => {
     if (key === "all") {
-      return { key: "all", label: "All teams", color: "#EEF4FF", count: members.length };
+      return { key: "all", label: "All teams", color: "#EEF4FF", count: source.length };
     }
     return {
       key,
@@ -1773,7 +1810,7 @@ function renderGalaxySkillPillsStrip() {
     return;
   }
   bar.hidden = false;
-  const rollup = members.filter(memberMatchesGalaxyRollupFilters);
+  const rollup = uiMembers().filter(memberMatchesGalaxyRollupFilters);
   const counts = new Map();
   rollup.forEach((m) => {
     const k = m.skillClusterKey;
@@ -1974,7 +2011,7 @@ function renderDetail(member) {
             <span>${escapeHtml(member.theme)}</span>
           </div>
           <h2 class="detail-name">${escapeHtml(member.name)}</h2>
-          <p class="detail-org"><span class="detail-org-label">Team</span>${escapeHtml(member.orgGroupLabel)}</p>
+          <p class="detail-org"><span class="detail-org-label">Team</span>${escapeHtml(memberOrgGroupLabel(member))}</p>
           <p class="detail-description">${member.description || "No detailed bio has been added yet."}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
@@ -2018,7 +2055,7 @@ function renderRoster(list) {
             <div>
               <p class="roster-name">${escapeHtml(member.name)}</p>
               <p class="roster-theme">
-                <span class="roster-team">${escapeHtml(member.orgGroupLabel)}</span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
+                <span class="roster-team">${escapeHtml(memberOrgGroupLabel(member))}</span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
               </p>
             </div>
             <div class="roster-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
@@ -2427,6 +2464,7 @@ function syncUI() {
 
 loadPersonalMarks();
 void (async () => {
+  await loadBundledMarks();
   await initCloudAuth();
   resizeCanvas();
   syncUI();
