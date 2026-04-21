@@ -475,6 +475,8 @@ function memberIsGalaxyClusterFocused(member) {
 }
 
 function galaxyMemberBaseColor(member) {
+  const tag = getPersonalBadge(member.entityId);
+  if (tag) return BADGE_META[tag].hex;
   if (member.isBoss) return BOSS_COLOR;
   if (state.galaxyViewMode === "skills") return galaxySkillHex(member.skillClusterKey);
   if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[member.orgGroup] || "#94A3B8";
@@ -1082,15 +1084,15 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const BADGE_KEYS = ["blue", "green", "red", "yellow", "purple", "orange", "black"];
+const BADGE_KEYS = ["blue", "purple", "pink", "red", "green", "yellow", "orange"];
 const BADGE_META = {
-  blue: { label: "Blue", hex: "#2563eb" },
-  green: { label: "Green", hex: "#16a34a" },
-  red: { label: "Red", hex: "#dc2626" },
-  yellow: { label: "Yellow", hex: "#ca8a04" },
-  purple: { label: "Purple", hex: "#9333ea" },
-  orange: { label: "Orange", hex: "#ea580c" },
-  black: { label: "Black", hex: "#171717" },
+  blue: { label: "Core team", hex: "#2563eb" },
+  purple: { label: "Content team", hex: "#9333ea" },
+  pink: { label: "Curators elite", hex: "#db2777" },
+  red: { label: "Curators Red", hex: "#dc2626" },
+  green: { label: "Curators green", hex: "#16a34a" },
+  yellow: { label: "Curators yellow", hex: "#ca8a04" },
+  orange: { label: "Curators orange", hex: "#ea580c" },
 };
 
 const personalMarks = { ratings: {}, badges: {} };
@@ -1103,6 +1105,14 @@ function loadPersonalMarks() {
     if (!data || typeof data !== "object") return;
     if (data.ratings && typeof data.ratings === "object") personalMarks.ratings = { ...data.ratings };
     if (data.badges && typeof data.badges === "object") personalMarks.badges = { ...data.badges };
+    let pruned = false;
+    for (const entityId of Object.keys(personalMarks.badges)) {
+      if (!BADGE_KEYS.includes(personalMarks.badges[entityId])) {
+        delete personalMarks.badges[entityId];
+        pruned = true;
+      }
+    }
+    if (pruned) savePersonalMarks();
   } catch {
     /* ignore corrupt storage */
   }
@@ -2305,17 +2315,6 @@ function drawFrame() {
     ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
-
-    const tag = getPersonalBadge(member.entityId);
-    if (tag) {
-      ctx.beginPath();
-      ctx.strokeStyle = BADGE_META[tag].hex;
-      ctx.globalAlpha = 0.88;
-      ctx.lineWidth = 1.65;
-      ctx.arc(member.x, member.y, radius + Math.max(5, radius * 0.09), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
 
     if (highlighted) {
       ctx.beginPath();

@@ -1453,13 +1453,12 @@ h1 {
   background: #9333ea;
 }
 
-.pastille-dot--orange {
-  background: #ea580c;
+.pastille-dot--pink {
+  background: #db2777;
 }
 
-.pastille-dot--black {
-  background: #171717;
-  border-color: rgba(255, 255, 255, 0.55);
+.pastille-dot--orange {
+  background: #ea580c;
 }
 
 .detail-markers {
