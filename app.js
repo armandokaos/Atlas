@@ -516,31 +516,75 @@ function galaxyMemberBaseColor(member) {
   return member.color;
 }
 
-/** Constellation nodes: neutral interior + colored rim (no solid color disks). */
-function drawConstellationMemberRing(ctx, x, y, radius, baseHex, highlighted) {
+/** Constellation nodes: glass interior + double rim + specular; interaction = none|hover|selected */
+function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction) {
   const hex = String(baseHex || "#94A3B8");
+  const sel = interaction === "selected";
+  const hov = interaction === "hover";
+  const scale = sel ? 1.06 : hov ? 1.035 : 1;
+  const r = radius * scale;
+  const lineW = Math.max(2, Math.min(3.8, r * 0.32));
+  const glow = sel ? 14 : hov ? 11 : 6;
+  const glowAlpha = sel ? "66" : hov ? "55" : "44";
+
   ctx.save();
   ctx.beginPath();
-  ctx.fillStyle = highlighted ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.07)";
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = sel ? "rgba(255, 255, 255, 0.42)" : hov ? "rgba(255, 255, 255, 0.22)" : "rgba(255, 255, 255, 0.1)";
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 
-  const lineW = Math.max(2, Math.min(3.6, radius * 0.3));
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.lineWidth = Math.max(1, lineW * 0.45);
+  ctx.arc(x, y, r - lineW * 0.15, 0, Math.PI * 2);
+  ctx.stroke();
+
   ctx.beginPath();
   ctx.strokeStyle = hex;
   ctx.lineWidth = lineW;
   ctx.lineJoin = "round";
   if (String(hex).startsWith("#") && hex.length >= 7) {
-    ctx.shadowBlur = highlighted ? 12 : 7;
-    ctx.shadowColor = `${hex}55`;
+    ctx.shadowBlur = glow;
+    ctx.shadowColor = `${hex}${glowAlpha}`;
   } else {
-    ctx.shadowBlur = highlighted ? 10 : 6;
-    ctx.shadowColor = "rgba(0, 0, 0, 0.12)";
+    ctx.shadowBlur = glow;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.14)";
   }
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.stroke();
   ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.lineWidth = 1.1;
+  const arcStart = -Math.PI * 0.35;
+  const arcLen = (Math.PI * 2 * 120) / 360;
+  ctx.arc(x, y, r - lineW * 0.35, arcStart, arcStart + arcLen);
+  ctx.stroke();
+
+  if (sel) {
+    ctx.beginPath();
+    ctx.strokeStyle = `${hex}99`;
+    ctx.lineWidth = 1.75;
+    ctx.setLineDash([4, 6]);
+    ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.04;
+    ctx.arc(x, y, r + Math.min(18, r * 0.36), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (hov) {
+    ctx.beginPath();
+    ctx.strokeStyle = `${hex}77`;
+    ctx.lineWidth = 1.5;
+    ctx.arc(x, y, r + Math.min(14, r * 0.28), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
+}
+
+function memberRingInteraction(member, selected, hoveredId) {
+  if (member.entityId === selected?.entityId) return "selected";
+  if (member.entityId === hoveredId) return "hover";
+  return "none";
 }
 
 /** Immersive person → skills constellation (canvas-only). See plan: focus_personne_canvas */
@@ -726,6 +770,7 @@ function startGalaxyPersonFocus(member) {
   requestAnimationFrame(() => {
     detailCard?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
+  renderGalaxyCanvasLegend();
 }
 
 function requestGalaxyPersonExit() {
@@ -747,6 +792,7 @@ function gfFinishExitToLandscape() {
   snapSingleThemeVogelPositions(vis);
   renderDetail(chosen);
   renderRoster(activeMembers());
+  renderGalaxyCanvasLegend();
 }
 
 function gfLerp(a, b, t) {
@@ -755,6 +801,7 @@ function gfLerp(a, b, t) {
 
 /** Flottement des pastilles skills — amplitudes nettes (px logiques canvas), liens + hit-test alignés. */
 function gfSkillNodeFloat(node, index, now) {
+  if (canvasReducedMotion()) return { ox: 0, oy: 0 };
   let amp = 1;
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
@@ -781,18 +828,9 @@ function gfSkillNodeRadius(node) {
   return 15 + Math.min(20, len * 1.08);
 }
 
-/** Fond neutre type produit SaaS — pas de « mesh » ni halos multiples. */
+/** Fond aligné sur le paysage (même atmosphère + grain). */
 function gfDrawFocusBackdrop(ctx, width, height) {
-  ctx.fillStyle = "#f3f2f6";
-  ctx.fillRect(0, 0, width, height);
-  const cx = width / 2;
-  const cy = height / 2;
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.48);
-  g.addColorStop(0, "rgba(255, 255, 255, 0.65)");
-  g.addColorStop(0.55, "rgba(255, 255, 255, 0)");
-  g.addColorStop(1, "rgba(0, 0, 0, 0.02)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, width, height);
+  drawGalaxyCanvasAtmosphere(ctx, width, height);
 }
 
 function gfDrawBackButton(ctx) {
@@ -836,16 +874,14 @@ function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now, 
     const nr = gfSkillNodeRadius(node);
     const ex = tx - ux * nr;
     const ey = ty - uy * nr;
-    const bend = dist * 0.065;
-    const mx = (sx + ex) / 2 - uy * bend;
-    const my = (sy + ey) / 2 + ux * bend;
+    const { cx: mx, cy: my } = gfQuadraticBridgeControl(sx, sy, ex, ey, 0.065);
     ctx.save();
-    ctx.globalAlpha = linksAlpha * 0.9;
+    ctx.globalAlpha = linksAlpha * 0.92;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.quadraticCurveTo(mx, my, ex, ey);
-    ctx.strokeStyle = "rgba(15, 12, 24, 0.1)";
-    ctx.lineWidth = 2.25;
+    ctx.strokeStyle = "rgba(116, 71, 245, 0.14)";
+    ctx.lineWidth = 2.35;
     ctx.lineCap = "round";
     ctx.stroke();
     ctx.beginPath();
@@ -853,8 +889,8 @@ function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now, 
     ctx.quadraticCurveTo(mx, my, ex, ey);
     ctx.setLineDash([3, 6]);
     ctx.lineDashOffset = dashPhase;
-    ctx.strokeStyle = "rgba(15, 12, 24, 0.16)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(15, 12, 24, 0.12)";
+    ctx.lineWidth = 1.1;
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
@@ -893,9 +929,9 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now, grpOx = 0, grpOy =
     const label = truncateGalaxyLabel(node.name, 28);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.font = '500 13px ui-sans-serif, system-ui, -apple-system, sans-serif';
+    ctx.font = CANVAS_FONT_MEMBER_NAMES;
     const ty = y + rDraw + 9;
-    ctx.fillStyle = "rgba(15, 12, 24, 0.78)";
+    ctx.fillStyle = CANVAS_TEXT_MEMBER_MUTED;
     ctx.fillText(label, x, ty);
     ctx.restore();
   });
@@ -982,12 +1018,13 @@ function gfCurrentHubGeometry(now, width, height) {
   const cx = width / 2;
   const cy = height / 2;
   if (galaxyFocus.mode === "person") {
+    const mot = canvasReducedMotion() ? 0 : 1;
     const t = now * 0.00036;
-    const driftX = Math.sin(t) * 18 + Math.cos(t * 0.59 + 0.42) * 9;
-    const driftY = Math.cos(t * 0.47) * 15 + Math.sin(t * 0.68 + 1.1) * 8;
+    const driftX = (Math.sin(t) * 18 + Math.cos(t * 0.59 + 0.42) * 9) * mot;
+    const driftY = (Math.cos(t * 0.47) * 15 + Math.sin(t * 0.68 + 1.1) * 8) * mot;
     const hx = cx + driftX;
     const hy = cy + driftY;
-    const rBreath = Math.sin(t * 1.04) * 0.095 + Math.sin(t * 0.46 + 2) * 0.042;
+    const rBreath = (Math.sin(t * 1.04) * 0.095 + Math.sin(t * 0.46 + 2) * 0.042) * mot;
     const hubR = galaxyFocus.hubTargetR * (1 + rBreath);
     return { hx, hy, hubR, hubGrowT: 1 };
   }
@@ -1022,29 +1059,30 @@ function gfCurrentHubGeometry(now, width, height) {
 
 function gfGalaxySkillNodeHitIndex(x, y, now, width, height) {
   const geo = gfCurrentHubGeometry(now, width, height);
-  const { hx, hy, hubR } = geo;
+  const { hx, hy } = geo;
   const cx0 = width / 2;
   const cy0 = height / 2;
   const grpOx = galaxyFocus.mode === "person" ? hx - cx0 : 0;
   const grpOy = galaxyFocus.mode === "person" ? hy - cy0 : 0;
-  if (Math.hypot(x - hx, y - hy) <= hubR + 16) return -1;
   for (let i = 0; i < galaxyFocus.skillNodes.length; i += 1) {
     const node = galaxyFocus.skillNodes[i];
     const { ox, oy } = gfSkillNodeFloat(node, i, now);
     const nx = node.tx + ox + grpOx;
     const ny = node.ty + oy + grpOy;
     const nr = gfSkillNodeRadius(node);
-    if (Math.hypot(x - nx, y - ny) <= nr + 20) return i;
+    /** Generous slop: drawn disk can sit near hub; hub is hit-tested after skills so circles win. */
+    if (Math.hypot(x - nx, y - ny) <= nr + 28) return i;
   }
   return -1;
 }
 
 function gfGalaxyPointerTargets(x, y, now, width, height) {
   if (gfHitBackButton(x, y)) return "back";
+  if (gfGalaxySkillNodeHitIndex(x, y, now, width, height) >= 0) return "skill";
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR } = geo;
   if (Math.hypot(x - hx, y - hy) <= hubR + 16) return "hub";
-  return gfGalaxySkillNodeHitIndex(x, y, now, width, height) >= 0 ? "skill" : "empty";
+  return "empty";
 }
 
 function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
@@ -1078,7 +1116,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.85;
     bgDots.forEach((d) => {
-      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, false);
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none");
     });
     ctx.restore();
 
@@ -1098,7 +1136,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = 0.14;
     bgDots.forEach((d) => {
-      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, false);
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none");
     });
     ctx.restore();
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
@@ -1120,7 +1158,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.82;
     bgDots.forEach((d) => {
-      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, false);
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none");
     });
     ctx.restore();
 
@@ -1582,6 +1620,94 @@ const canvas = document.querySelector("#galaxy-canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
 if (typeof ctx.imageSmoothingQuality === "string") {
   ctx.imageSmoothingQuality = "high";
+}
+
+const __galaxyMotionMql = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? { matches: false };
+let __galaxyReducedMotion = !!__galaxyMotionMql.matches;
+function canvasReducedMotion() {
+  return __galaxyReducedMotion;
+}
+__galaxyMotionMql.addEventListener?.("change", (e) => {
+  __galaxyReducedMotion = !!e.matches;
+});
+
+/** Shared canvas tokens (paysage + focus) — dataviz-style hierarchy. */
+const CANVAS_FONT_CLUSTER = '600 10px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+const CANVAS_FONT_CLUSTER_FOCUS = '600 11px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+const CANVAS_FONT_MEMBER_NAMES = '600 11px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+const CANVAS_FONT_MEMBER_PIN = '600 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+const CANVAS_TEXT_CLUSTER = "rgba(28, 24, 42, 0.82)";
+const CANVAS_TEXT_MEMBER = "rgba(28, 24, 42, 0.92)";
+const CANVAS_TEXT_MEMBER_MUTED = "rgba(28, 24, 42, 0.78)";
+
+let __galaxyGrainPattern = null;
+function ensureGalaxyGrainPattern(targetCtx) {
+  if (canvasReducedMotion()) return null;
+  if (__galaxyGrainPattern) return __galaxyGrainPattern;
+  const n = 64;
+  const c = document.createElement("canvas");
+  c.width = n;
+  c.height = n;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.clearRect(0, 0, n, n);
+  for (let i = 0; i < 140; i += 1) {
+    const x = (i * 37 + (i % 5)) % n;
+    const y = (i * 19 + ((i * 3) % 7)) % n;
+    const a = 0.035 + (i % 6) * 0.01;
+    g.fillStyle = `rgba(22, 18, 38, ${a})`;
+    g.fillRect(x, y, 1, 1);
+  }
+  __galaxyGrainPattern = targetCtx.createPattern(c, "repeat");
+  return __galaxyGrainPattern;
+}
+
+function drawGalaxyCanvasAtmosphere(targetCtx, width, height) {
+  const cx = width / 2;
+  const cy = height / 2;
+  const r = Math.max(width, height) * 0.55;
+  const base = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  base.addColorStop(0, "rgba(255, 255, 255, 0.99)");
+  base.addColorStop(0.38, "rgba(248, 244, 255, 0.94)");
+  base.addColorStop(0.7, "rgba(232, 222, 252, 0.55)");
+  base.addColorStop(1, "rgba(255, 255, 255, 0.9)");
+  targetCtx.fillStyle = base;
+  targetCtx.fillRect(0, 0, width, height);
+
+  const g1 = targetCtx.createRadialGradient(cx * 0.68, cy * 0.36, 0, cx * 0.68, cy * 0.36, r * 0.58);
+  g1.addColorStop(0, "rgba(138, 99, 255, 0.14)");
+  g1.addColorStop(0.5, "rgba(138, 99, 255, 0.04)");
+  g1.addColorStop(1, "rgba(138, 99, 255, 0)");
+  targetCtx.fillStyle = g1;
+  targetCtx.fillRect(0, 0, width, height);
+
+  const g2 = targetCtx.createRadialGradient(cx * 1.12, cy * 0.88, 0, cx * 1.12, cy * 0.88, r * 0.42);
+  g2.addColorStop(0, "rgba(95, 200, 235, 0.1)");
+  g2.addColorStop(1, "rgba(95, 200, 235, 0)");
+  targetCtx.fillStyle = g2;
+  targetCtx.fillRect(0, 0, width, height);
+
+  const pat = ensureGalaxyGrainPattern(targetCtx);
+  if (pat) {
+    targetCtx.save();
+    targetCtx.globalAlpha = 0.055;
+    targetCtx.fillStyle = pat;
+    targetCtx.fillRect(0, 0, width, height);
+    targetCtx.restore();
+  }
+}
+
+/** Quadratic control point for a subtle arc between two points (shared bridge math). */
+function gfQuadraticBridgeControl(x0, y0, x1, y1, bendFactor) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const dist = Math.hypot(dx, dy) || 1;
+  const mx = (x0 + x1) / 2;
+  const my = (y0 + y1) / 2;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const bend = dist * bendFactor;
+  return { cx: mx - uy * bend, cy: my + ux * bend };
 }
 const searchInput = document.querySelector("#search-input");
 const spotlightThemeStrip = document.querySelector("#spotlight-theme-strip");
@@ -2280,7 +2406,7 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
   const { diskHalfW, diskHalfH } = diskExtents;
   const layoutPull = 0.016;
   const layoutDamp = 0.9;
-  const angleDrift = now * 0.000035;
+  const angleDrift = canvasReducedMotion() ? 0 : now * 0.000035;
 
   list.forEach((member, index) => {
     if (freezeEntityId && member.entityId === freezeEntityId) return;
@@ -2294,8 +2420,9 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
       const idx = index + 1;
       const golden = idx * 2.39996322972865332;
       const normR = Math.sqrt(idx / (n + 1.12));
-      const wobbleX = Math.sin(now * 0.00022 + member.seed * 3.9) * 2.2;
-      const wobbleY = Math.cos(now * 0.0002 + member.seed * 2.7) * 2.2;
+      const wobbleAmp = canvasReducedMotion() ? 0 : 1;
+      const wobbleX = Math.sin(now * 0.00022 + member.seed * 3.9) * 2.2 * wobbleAmp;
+      const wobbleY = Math.cos(now * 0.0002 + member.seed * 2.7) * 2.2 * wobbleAmp;
       const spin = state.phase * 0.06;
       const t = golden + spin;
       targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
@@ -2329,6 +2456,36 @@ function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
     }));
 }
 
+/** Subtle member→cluster anchor curves (density guards for clarity). */
+function drawGalaxyLandscapeMemberLinks(targetCtx, list, anchors, width, height) {
+  void width;
+  void height;
+  const n = list.length;
+  const k = anchors.size;
+  if (!n || !k || isGalaxyClusterFocus()) return;
+  if (k > 7 || n > 88) return;
+  if (k === 1 && n > 48) return;
+  const baseAlpha = k <= 3 ? 0.09 : k <= 5 ? 0.065 : 0.048;
+  list.forEach((member) => {
+    if (!Number.isFinite(member.x) || !Number.isFinite(member.y)) return;
+    const clusterKey = getGalaxyClusterKey(member);
+    const anchor = anchors.get(clusterKey);
+    if (!anchor) return;
+    const color = getGalaxyClusterColor(clusterKey);
+    const { cx, cy } = gfQuadraticBridgeControl(member.x, member.y, anchor.x, anchor.y, 0.052);
+    targetCtx.save();
+    targetCtx.globalAlpha = baseAlpha;
+    targetCtx.beginPath();
+    targetCtx.moveTo(member.x, member.y);
+    targetCtx.quadraticCurveTo(cx, cy, anchor.x, anchor.y);
+    targetCtx.strokeStyle = color;
+    targetCtx.lineWidth = 1.2;
+    targetCtx.lineCap = "round";
+    targetCtx.stroke();
+    targetCtx.restore();
+  });
+}
+
 function drawFrame() {
   resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
@@ -2356,12 +2513,7 @@ function drawFrame() {
   const anchors = anchorMap(list, width, height);
 
   ctx.clearRect(0, 0, width, height);
-
-  const backgroundGlow = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height * 0.48);
-  backgroundGlow.addColorStop(0, "rgba(182, 128, 255, 0.055)");
-  backgroundGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = backgroundGlow;
-  ctx.fillRect(0, 0, width, height);
+  drawGalaxyCanvasAtmosphere(ctx, width, height);
 
   ctx.save();
   const singleThemeDisk = anchors.size === 1;
@@ -2373,52 +2525,71 @@ function drawFrame() {
     : isGalaxyClusterFocus()
       ? span * 0.124
       : span * 0.096;
+  const ringDash = !canvasReducedMotion() && anchors.size <= 8;
   anchors.forEach((anchor, clusterKey) => {
     const color = getGalaxyClusterColor(clusterKey);
+    const ringLW = isGalaxyClusterFocus() ? 1.35 : 1.05;
     ctx.beginPath();
-    ctx.strokeStyle = `${color}33`;
-    ctx.lineWidth = isGalaxyClusterFocus() ? 1.25 : 1;
     if (singleThemeDisk && typeof ctx.ellipse === "function") {
       ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
     } else {
       ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
     }
+    ctx.strokeStyle = `${color}18`;
+    ctx.lineWidth = ringLW + 2.2;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = `${color}22`;
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
-    ctx.fillStyle = "#796f99";
-    ctx.font = isGalaxyClusterFocus()
-      ? '600 13px system-ui, "Avenir Next", "Segoe UI", sans-serif'
-      : '500 12px system-ui, "Avenir Next", "Segoe UI", sans-serif';
-    const label = truncateGalaxyLabel(getGalaxyClusterLabel(clusterKey), 34);
+    ctx.beginPath();
+    if (singleThemeDisk && typeof ctx.ellipse === "function") {
+      ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
+    } else {
+      ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
+    }
+    ctx.strokeStyle = `${color}4d`;
+    ctx.lineWidth = ringLW;
+    if (ringDash) {
+      ctx.setLineDash([9, 12]);
+      ctx.lineDashOffset = -state.phase * 24;
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = isGalaxyClusterFocus() ? CANVAS_FONT_CLUSTER_FOCUS : CANVAS_FONT_CLUSTER;
+    const rawLabel = truncateGalaxyLabel(getGalaxyClusterLabel(clusterKey), 34);
+    const label = rawLabel.toUpperCase();
     const tw = ctx.measureText(label).width;
     const labelY = singleThemeDisk
       ? Math.max(14, anchor.y - diskHalfH + 16)
       : anchor.y - ringRadius - 14;
-    ctx.fillText(label, anchor.x - tw / 2, labelY);
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.strokeText(label, anchor.x, labelY);
+    ctx.fillStyle = CANVAS_TEXT_CLUSTER;
+    ctx.fillText(label, anchor.x, labelY);
   });
   ctx.restore();
 
   stepMemberLayoutPhysics(list, width, height, now, null);
 
-  list.forEach((member) => {
-    const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
-    const radius = memberDisplayRadius(member, selected, hoveredId);
-    drawConstellationMemberRing(ctx, member.x, member.y, radius, galaxyMemberBaseColor(member), highlighted);
+  drawGalaxyLandscapeMemberLinks(ctx, list, anchors, width, height);
 
-    if (highlighted) {
-      ctx.beginPath();
-      ctx.strokeStyle = `${galaxyMemberBaseColor(member)}77`;
-      ctx.lineWidth = 2;
-      ctx.arc(member.x, member.y, radius + Math.min(20, radius * 0.38), 0, Math.PI * 2);
-      ctx.stroke();
-    }
+  list.forEach((member) => {
+    const interaction = memberRingInteraction(member, selected, hoveredId);
+    const radius = memberDisplayRadius(member, selected, hoveredId);
+    drawConstellationMemberRing(ctx, member.x, member.y, radius, galaxyMemberBaseColor(member), interaction);
   });
 
   if (isGalaxyClusterFocus()) {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.font = '600 11px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+    ctx.font = CANVAS_FONT_MEMBER_NAMES;
     list.forEach((member) => {
       const radius = memberDisplayRadius(member, selected, hoveredId);
       const label = truncateGalaxyLabel(member.name, 22);
@@ -2426,9 +2597,9 @@ function drawFrame() {
       const ty = member.y + radius + 4;
       ctx.lineJoin = "round";
       ctx.lineWidth = 4;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
       ctx.strokeText(label, tx, ty);
-      ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? "#120c1f" : "rgba(35, 31, 48, 0.9)";
+      ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? CANVAS_TEXT_MEMBER : CANVAS_TEXT_MEMBER_MUTED;
       ctx.fillText(label, tx, ty);
     });
     ctx.restore();
@@ -2437,8 +2608,8 @@ function drawFrame() {
     if (pin && (hoveredId || selected)) {
       const radius = memberDisplayRadius(pin, selected, hoveredId);
       ctx.save();
-      ctx.fillStyle = "#2b2734";
-      ctx.font = '600 13px system-ui, "Avenir Next", "Segoe UI", sans-serif';
+      ctx.fillStyle = CANVAS_TEXT_MEMBER;
+      ctx.font = CANVAS_FONT_MEMBER_PIN;
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
       ctx.fillText(pin.name, pin.x + radius + 8, pin.y - radius - 4);
@@ -2489,6 +2660,7 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
   renderDetail(chosen);
   renderRoster(base);
   snapSingleThemeVogelPositions(vis);
+  renderGalaxyCanvasLegend();
 }
 
 function syncUI() {
@@ -2512,6 +2684,40 @@ function syncUI() {
   }
   state.rosterPage = 1;
   refreshSpotlightUI({ rebuildThemes: true });
+}
+
+function galaxyCanvasViewModeLabel() {
+  if (state.galaxyViewMode === "team") return "Team";
+  if (state.galaxyViewMode === "skills") return "Skills";
+  return "Category";
+}
+
+function renderGalaxyCanvasLegend() {
+  const el = document.querySelector("#galaxy-canvas-legend");
+  if (!el) return;
+  if (galaxyFocus.mode !== "landscape") {
+    el.innerHTML = `<div class="galaxy-canvas-legend__inner galaxy-canvas-legend__inner--focus"><span>${escapeHtml("Esc — return to map")}</span></div>`;
+    return;
+  }
+  const list = visibleMembers();
+  const mode = galaxyCanvasViewModeLabel();
+  const filterLabel =
+    state.galaxyViewMode === "skills" && state.skillGalaxy !== "all"
+      ? String(GALAXY_SKILL_LABEL_BY_KEY.get(state.skillGalaxy) || state.skillGalaxy || "").trim()
+      : "";
+  const safeFilter = filterLabel ? escapeHtml(truncateGalaxyLabel(filterLabel, 28)) : "";
+  const parts = [
+    `<span class="galaxy-canvas-legend__mode">${escapeHtml(mode)}</span>`,
+    `<span class="galaxy-canvas-legend__sep" aria-hidden="true">·</span>`,
+    `<span class="galaxy-canvas-legend__count">${formatNumber(list.length)} visible</span>`,
+  ];
+  if (safeFilter) {
+    parts.push(`<span class="galaxy-canvas-legend__sep" aria-hidden="true">·</span>`, `<span class="galaxy-canvas-legend__filter">${safeFilter}</span>`);
+  }
+  parts.push(
+    `<span class="galaxy-canvas-legend__hint">${escapeHtml("Click a profile with skills to focus")}</span>`,
+  );
+  el.innerHTML = `<div class="galaxy-canvas-legend__inner">${parts.join("")}</div>`;
 }
 
 loadPersonalMarks();
