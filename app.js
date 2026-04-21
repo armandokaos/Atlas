@@ -59,7 +59,7 @@ const ORG_GROUP_RAW_SPECS = [
 const ORG_GROUP_SPECS = ORG_GROUP_RAW_SPECS.map((row) => ({
   key: row.key,
   label: row.label,
-  names: new Set(row.names),
+  names: new Set(row.names.map((name) => String(name || "").trim().toLowerCase())),
 }));
 
 const ORG_GROUP_LABEL_BY_KEY = {
@@ -101,7 +101,7 @@ const BADGE_TO_ORG_GROUP = {
 };
 
 function resolveOrgGroupKey(displayName) {
-  const n = String(displayName || "").trim();
+  const n = String(displayName || "").trim().toLowerCase();
   for (const spec of ORG_GROUP_SPECS) {
     if (spec.names.has(n)) return spec.key;
   }
@@ -424,6 +424,8 @@ const state = {
 };
 
 function memberOrgGroupKey(member) {
+  // Explicit team mapping from member name wins over badge-based curator buckets.
+  if (member.orgGroup && member.orgGroup !== "curators") return member.orgGroup;
   const fromBadge = BADGE_TO_ORG_GROUP[getPersonalBadge(member.entityId)];
   if (fromBadge) return fromBadge;
   return member.orgGroup || "curators";
