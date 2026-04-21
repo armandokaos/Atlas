@@ -666,8 +666,10 @@ function gfCurrentHubGeometry(now, width, height) {
   const cx = width / 2;
   const cy = height / 2;
   if (galaxyFocus.mode === "person") {
-    const breath = Math.sin(now * 0.00025) * 0.004;
-    return { hx: cx, hy: cy, hubR: galaxyFocus.hubTargetR * (1 + breath), hubGrowT: 1 };
+    const t = now * 0.00052;
+    const rBreath = Math.sin(t) * 0.042 + Math.sin(t * 0.58 + 1.3) * 0.018;
+    const hubR = galaxyFocus.hubTargetR * (1 + rBreath);
+    return { hx: cx, hy: cy, hubR, hubGrowT: 1 };
   }
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
