@@ -1449,6 +1449,14 @@ h1 {
   background: #eab308;
 }
 
+.pastille-dot--purple {
+  background: #9333ea;
+}
+
+.pastille-dot--orange {
+  background: #ea580c;
+}
+
 .detail-markers {
   margin-top: 4px;
   padding: 14px 16px;

@@ -1082,12 +1082,14 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const BADGE_KEYS = ["blue", "green", "red", "yellow"];
+const BADGE_KEYS = ["blue", "green", "red", "yellow", "purple", "orange"];
 const BADGE_META = {
   blue: { label: "Blue", hex: "#2563eb" },
   green: { label: "Green", hex: "#16a34a" },
   red: { label: "Red", hex: "#dc2626" },
   yellow: { label: "Yellow", hex: "#ca8a04" },
+  purple: { label: "Purple", hex: "#9333ea" },
+  orange: { label: "Orange", hex: "#ea580c" },
 };
 
 const personalMarks = { ratings: {}, badges: {} };
@@ -1882,11 +1884,10 @@ function renderMarkerFilters(baseList) {
   const badgeCounts = {
     all: n,
     none: scope.filter((m) => !getPersonalBadge(m.entityId)).length,
-    blue: scope.filter((m) => getPersonalBadge(m.entityId) === "blue").length,
-    green: scope.filter((m) => getPersonalBadge(m.entityId) === "green").length,
-    red: scope.filter((m) => getPersonalBadge(m.entityId) === "red").length,
-    yellow: scope.filter((m) => getPersonalBadge(m.entityId) === "yellow").length,
   };
+  for (const k of BADGE_KEYS) {
+    badgeCounts[k] = scope.filter((m) => getPersonalBadge(m.entityId) === k).length;
+  }
   const sf = state.starFilter;
   const bf = state.badgeFilter;
   const starRow = [
@@ -1909,10 +1910,7 @@ function renderMarkerFilters(baseList) {
   const badgeRow = [
     ["all", "Any tag", null, true],
     ["none", "None", null, false],
-    ["blue", "", "blue", false],
-    ["green", "", "green", false],
-    ["red", "", "red", false],
-    ["yellow", "", "yellow", false],
+    ...BADGE_KEYS.map((k) => [k, "", k, false]),
   ]
     .map(([key, label, colorKey, isText]) => {
       const count = badgeCounts[key];
