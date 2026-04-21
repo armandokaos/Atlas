@@ -516,66 +516,58 @@ function galaxyMemberBaseColor(member) {
   return member.color;
 }
 
-/** Constellation nodes: glass interior + double rim + specular; interaction = none|hover|selected */
+function galaxyHexToRgb(hex) {
+  const raw = String(hex || "#94A3B8").replace(/^#/, "");
+  if (!/^[0-9a-f]{6}$/i.test(raw)) return { r: 148, g: 163, b: 184 };
+  const n = parseInt(raw, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/** Constellation nodes: filled disks + light rim; interaction = none|hover|selected */
 function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction) {
   const hex = String(baseHex || "#94A3B8");
+  const { r, g, b } = galaxyHexToRgb(hex);
   const sel = interaction === "selected";
   const hov = interaction === "hover";
-  const scale = sel ? 1.06 : hov ? 1.035 : 1;
-  const r = radius * scale;
-  const lineW = Math.max(2, Math.min(3.8, r * 0.32));
-  const glow = sel ? 14 : hov ? 11 : 6;
-  const glowAlpha = sel ? "66" : hov ? "55" : "44";
+  const scale = sel ? 1.055 : hov ? 1.03 : 1;
+  const rad = radius * scale;
+  const fillA = sel ? 0.93 : hov ? 0.88 : 0.82;
 
   ctx.save();
   ctx.beginPath();
-  ctx.fillStyle = sel ? "rgba(255, 255, 255, 0.42)" : hov ? "rgba(255, 255, 255, 0.22)" : "rgba(255, 255, 255, 0.1)";
-  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${r},${g},${b},${fillA})`;
   ctx.fill();
 
   ctx.beginPath();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
-  ctx.lineWidth = Math.max(1, lineW * 0.45);
-  ctx.arc(x, y, r - lineW * 0.15, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.strokeStyle = hex;
-  ctx.lineWidth = lineW;
-  ctx.lineJoin = "round";
-  if (String(hex).startsWith("#") && hex.length >= 7) {
-    ctx.shadowBlur = glow;
-    ctx.shadowColor = `${hex}${glowAlpha}`;
-  } else {
-    ctx.shadowBlur = glow;
-    ctx.shadowColor = "rgba(0, 0, 0, 0.14)";
-  }
-  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.lineWidth = sel ? 2 : hov ? 1.75 : 1.35;
+  ctx.shadowBlur = sel ? 10 : hov ? 8 : 5;
+  ctx.shadowColor = `rgba(${r},${g},${b},0.28)`;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   ctx.beginPath();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-  ctx.lineWidth = 1.1;
-  const arcStart = -Math.PI * 0.35;
-  const arcLen = (Math.PI * 2 * 120) / 360;
-  ctx.arc(x, y, r - lineW * 0.35, arcStart, arcStart + arcLen);
+  ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(18, 14, 32, 0.12)";
+  ctx.lineWidth = 1;
   ctx.stroke();
 
   if (sel) {
     ctx.beginPath();
-    ctx.strokeStyle = `${hex}99`;
-    ctx.lineWidth = 1.75;
-    ctx.setLineDash([4, 6]);
-    ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.04;
-    ctx.arc(x, y, r + Math.min(18, r * 0.36), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.55)`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(canvasReducedMotion() ? [] : [4, 5]);
+    ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.025;
+    ctx.arc(x, y, rad + Math.min(16, rad * 0.34), 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
   } else if (hov) {
     ctx.beginPath();
-    ctx.strokeStyle = `${hex}77`;
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.35)`;
     ctx.lineWidth = 1.5;
-    ctx.arc(x, y, r + Math.min(14, r * 0.28), 0, Math.PI * 2);
+    ctx.arc(x, y, rad + Math.min(11, rad * 0.24), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
@@ -2464,7 +2456,7 @@ function drawGalaxyLandscapeMemberLinks(targetCtx, list, anchors, width, height)
   const k = anchors.size;
   if (!n || !k || isGalaxyClusterFocus()) return;
   if (k > 7 || n > 88) return;
-  if (k === 1 && n > 48) return;
+  if (k === 1) return;
   const baseAlpha = k <= 3 ? 0.09 : k <= 5 ? 0.065 : 0.048;
   list.forEach((member) => {
     if (!Number.isFinite(member.x) || !Number.isFinite(member.y)) return;
@@ -2525,37 +2517,18 @@ function drawFrame() {
     : isGalaxyClusterFocus()
       ? span * 0.124
       : span * 0.096;
-  const ringDash = !canvasReducedMotion() && anchors.size <= 8;
   anchors.forEach((anchor, clusterKey) => {
     const color = getGalaxyClusterColor(clusterKey);
-    const ringLW = isGalaxyClusterFocus() ? 1.35 : 1.05;
+    const ringLW = singleThemeDisk ? 0.9 : isGalaxyClusterFocus() ? 1 : 0.75;
     ctx.beginPath();
     if (singleThemeDisk && typeof ctx.ellipse === "function") {
       ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
     } else {
       ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
     }
-    ctx.strokeStyle = `${color}18`;
-    ctx.lineWidth = ringLW + 2.2;
-    ctx.shadowBlur = 4;
-    ctx.shadowColor = `${color}22`;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    ctx.beginPath();
-    if (singleThemeDisk && typeof ctx.ellipse === "function") {
-      ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
-    } else {
-      ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
-    }
-    ctx.strokeStyle = `${color}4d`;
+    ctx.strokeStyle = `${color}20`;
     ctx.lineWidth = ringLW;
-    if (ringDash) {
-      ctx.setLineDash([9, 12]);
-      ctx.lineDashOffset = -state.phase * 24;
-    }
     ctx.stroke();
-    ctx.setLineDash([]);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
