@@ -1107,7 +1107,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const DEFAULT_MARKS_JSON_URL = "./geo-atlas-marks-2026-04-21-1.json";
+const DEFAULT_MARKS_JSON_URLS = ["./geo-atlas-marks-2026-04-21-1.json", "./geo-atlas-marks-2026-04-21-2.json"];
 const BADGE_KEYS = ["blue", "purple", "pink", "red", "green", "yellow", "orange", "black"];
 const BADGE_META = {
   blue: { label: "Core team", hex: "#2563eb" },
@@ -1155,12 +1155,16 @@ function savePersonalMarks() {
 }
 
 async function loadBundledMarks() {
+  let loaded = false;
   try {
-    const res = await fetch(DEFAULT_MARKS_JSON_URL, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = await res.json();
-    mergeImportedMarks(data);
-    savePersonalMarks();
+    for (const url of DEFAULT_MARKS_JSON_URLS) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) continue;
+      const data = await res.json();
+      mergeImportedMarks(data);
+      loaded = true;
+    }
+    if (loaded) savePersonalMarks();
   } catch {
     /* optional seed file; ignore if unavailable */
   }
