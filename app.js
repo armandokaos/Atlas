@@ -265,7 +265,7 @@ const members = data.members
       y: 0,
       vx: 0,
       vy: 0,
-      radius: 2.5 + Math.min(8, spaceCount * 0.9 + member.descLength / 120),
+      radius: 12 + Math.min(28, spaceCount * 2.35 + member.descLength / 48),
       seed: index * 0.37,
     };
   });
@@ -1802,8 +1802,8 @@ function memberDisplayRadius(member, selected, hoveredId) {
     const richness = Math.min(1, (member.descLength || 0) / 520 + (member.spaceCount || 0) / 10);
     r *= Math.exp(0.68 + richness * 1.12);
   }
-  if (highlighted) r += 4;
-  return Math.min(r, 44);
+  if (highlighted) r += 10;
+  return Math.min(r, 80);
 }
 
 function truncateGalaxyLabel(name, max = 20) {
@@ -2052,7 +2052,7 @@ function drawFrame() {
 
     ctx.beginPath();
     ctx.fillStyle = `${member.color}${highlighted ? "" : isGalaxyThemeFocus() ? "e6" : "cc"}`;
-    ctx.shadowBlur = highlighted ? 32 : isGalaxyThemeFocus() ? 22 : 16;
+    ctx.shadowBlur = highlighted ? 48 : isGalaxyThemeFocus() ? 36 : 28;
     ctx.shadowColor = member.color;
     ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -2064,7 +2064,7 @@ function drawFrame() {
       ctx.strokeStyle = BADGE_META[tag].hex;
       ctx.globalAlpha = 0.88;
       ctx.lineWidth = 1.65;
-      ctx.arc(member.x, member.y, radius + 3.2, 0, Math.PI * 2);
+      ctx.arc(member.x, member.y, radius + Math.max(5, radius * 0.09), 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -2073,7 +2073,7 @@ function drawFrame() {
       ctx.beginPath();
       ctx.strokeStyle = `${member.color}77`;
       ctx.lineWidth = 2;
-      ctx.arc(member.x, member.y, radius + Math.min(12, radius * 0.35), 0, Math.PI * 2);
+      ctx.arc(member.x, member.y, radius + Math.min(20, radius * 0.38), 0, Math.PI * 2);
       ctx.stroke();
     }
   });
@@ -2132,7 +2132,7 @@ function pickMemberFromPointer(event) {
   list.forEach((member) => {
     const r = memberDisplayRadius(member, selected, state.hoveredId);
     const distance = Math.hypot(member.x - x, member.y - y);
-    if (distance < r + 12 && distance < nearestDistance) {
+    if (distance < r + 20 && distance < nearestDistance) {
       nearest = member;
       nearestDistance = distance;
     }
