@@ -42,7 +42,7 @@ const ORG_GROUP_RAW_SPECS = [
   {
     key: "geo-content",
     label: "Geo content team",
-    names: ["Bertrand Armando", "CptMoh", "Vytautas", "Hashir", "Rushab Taneja"],
+    names: ["Bertrand Armando", "CptMoh", "Vytautas", "Hashir", "Rushab Taneja", "Ahmed Abdelmalek", "Dan Cordie"],
   },
   { key: "geo-dev", label: "Geo core devs", names: ["Walaa01"] },
   {
