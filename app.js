@@ -523,20 +523,20 @@ function galaxyHexToRgb(hex) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
-/** Constellation nodes: neon-filled disks (dark UI); interaction = none|hover|selected */
+/** Constellation nodes: soft filled disks for light UI; interaction = none|hover|selected */
 function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction) {
   const hex = String(baseHex || "#94A3B8");
   const { r, g, b } = galaxyHexToRgb(hex);
   const sel = interaction === "selected";
   const hov = interaction === "hover";
-  const scale = sel ? 1.08 : hov ? 1.04 : 1;
+  const scale = sel ? 1.06 : hov ? 1.035 : 1;
   const rad = radius * scale;
-  const ix = x - rad * 0.38;
-  const iy = y - rad * 0.38;
-  const gFill = ctx.createRadialGradient(ix, iy, rad * 0.05, x, y, rad);
-  gFill.addColorStop(0, `rgba(${Math.min(255, r + 55)}, ${Math.min(255, g + 45)}, ${Math.min(255, b + 70)}, 0.95)`);
-  gFill.addColorStop(0.55, `rgba(${r},${g},${b},0.92)`);
-  gFill.addColorStop(1, `rgba(${Math.max(0, r - 35)}, ${Math.max(0, g - 35)}, ${Math.max(0, b - 25)}, 0.88)`);
+  const ix = x - rad * 0.32;
+  const iy = y - rad * 0.32;
+  const gFill = ctx.createRadialGradient(ix, iy, rad * 0.08, x, y, rad);
+  gFill.addColorStop(0, `rgba(${Math.min(255, r + 42)}, ${Math.min(255, g + 38)}, ${Math.min(255, b + 55)}, 0.92)`);
+  gFill.addColorStop(0.65, `rgba(${r},${g},${b},0.88)`);
+  gFill.addColorStop(1, `rgba(${Math.max(0, r - 22)}, ${Math.max(0, g - 22)}, ${Math.max(0, b - 18)}, 0.86)`);
 
   ctx.save();
   ctx.beginPath();
@@ -545,40 +545,40 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction) {
   ctx.fill();
 
   ctx.beginPath();
-  ctx.arc(x, y, rad * 0.92, -Math.PI * 0.25, -Math.PI * 0.25 + 1.15);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.lineWidth = 1.25;
+  ctx.arc(x, y, rad * 0.9, -0.35, -0.35 + 1.0);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.lineWidth = 1.1;
   ctx.stroke();
 
   ctx.beginPath();
   ctx.arc(x, y, rad, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.38)";
-  ctx.lineWidth = sel ? 2 : hov ? 1.65 : 1.2;
-  ctx.shadowBlur = sel ? 22 : hov ? 16 : 12;
-  ctx.shadowColor = `rgba(${r},${g},${b},0.55)`;
+  ctx.strokeStyle = `rgba(${r},${g},${b},0.75)`;
+  ctx.lineWidth = sel ? 2.25 : hov ? 1.85 : 1.45;
+  ctx.shadowBlur = sel ? 12 : hov ? 9 : 6;
+  ctx.shadowColor = `rgba(${r},${g},${b},0.22)`;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   ctx.beginPath();
   ctx.arc(x, y, rad, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+  ctx.strokeStyle = "rgba(117, 99, 164, 0.14)";
   ctx.lineWidth = 1;
   ctx.stroke();
 
   if (sel) {
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(${Math.min(255, r + 80)}, ${Math.min(255, g + 80)}, 255, 0.65)`;
+    ctx.strokeStyle = "rgba(116, 71, 245, 0.45)";
     ctx.lineWidth = 2;
-    ctx.setLineDash(canvasReducedMotion() ? [] : [5, 6]);
-    ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.03;
-    ctx.arc(x, y, rad + Math.min(18, rad * 0.38), 0, Math.PI * 2);
+    ctx.setLineDash(canvasReducedMotion() ? [] : [4, 5]);
+    ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.025;
+    ctx.arc(x, y, rad + Math.min(15, rad * 0.32), 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
   } else if (hov) {
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.5)`;
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.35)`;
     ctx.lineWidth = 1.5;
-    ctx.arc(x, y, rad + Math.min(12, rad * 0.26), 0, Math.PI * 2);
+    ctx.arc(x, y, rad + Math.min(10, rad * 0.22), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
@@ -841,12 +841,12 @@ function gfDrawBackButton(ctx) {
   ctx.save();
   ctx.beginPath();
   gfRoundRectPath(ctx, x, y, w, h, 10);
-  ctx.fillStyle = "rgba(28, 26, 42, 0.92)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
   ctx.fill();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.strokeStyle = "rgba(117, 99, 164, 0.18)";
   ctx.lineWidth = 1;
   ctx.stroke();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
+  ctx.strokeStyle = "rgba(38, 35, 52, 0.55)";
   ctx.lineWidth = 1.5;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -883,8 +883,8 @@ function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now, 
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.quadraticCurveTo(mx, my, ex, ey);
-    ctx.strokeStyle = "rgba(167, 139, 255, 0.38)";
-    ctx.lineWidth = 2.35;
+    ctx.strokeStyle = "rgba(116, 71, 245, 0.22)";
+    ctx.lineWidth = 2.2;
     ctx.lineCap = "round";
     ctx.stroke();
     ctx.beginPath();
@@ -892,7 +892,7 @@ function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now, 
     ctx.quadraticCurveTo(mx, my, ex, ey);
     ctx.setLineDash([3, 6]);
     ctx.lineDashOffset = dashPhase;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.strokeStyle = "rgba(117, 99, 164, 0.14)";
     ctx.lineWidth = 1.1;
     ctx.stroke();
     ctx.setLineDash([]);
@@ -916,19 +916,19 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now, grpOx = 0, grpOy =
     ctx.save();
     ctx.globalAlpha = a;
     ctx.beginPath();
-    ctx.fillStyle = "rgba(18, 16, 30, 0.94)";
+    ctx.fillStyle = "#ffffff";
     ctx.arc(x, y, rDraw, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.strokeStyle = "rgba(117, 99, 164, 0.12)";
     ctx.lineWidth = 1;
     ctx.arc(x, y, rDraw, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
     ctx.strokeStyle = node.color;
-    ctx.lineWidth = 2.25;
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = node.color;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = "rgba(116, 71, 245, 0.2)";
     ctx.arc(x, y, rDraw - 0.5, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
@@ -989,7 +989,7 @@ function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `500 ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
-  ctx.fillStyle = "rgba(246, 244, 255, 0.94)";
+  ctx.fillStyle = "rgba(32, 28, 44, 0.9)";
   lines.forEach((line, i) => {
     const ly = yStart + i * lineHeight;
     ctx.fillText(line, hx, ly);
@@ -999,27 +999,21 @@ function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
 
 function gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   const hubC = member.color || "#7447f5";
-  const { r, g, b } = galaxyHexToRgb(hubC.startsWith("#") ? hubC : "#7447f5");
   ctx.save();
   ctx.beginPath();
   ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
-  const hg = ctx.createRadialGradient(hx - hubR * 0.35, hy - hubR * 0.35, hubR * 0.08, hx, hy, hubR);
-  hg.addColorStop(0, `rgba(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 50)}, 0.98)`);
-  hg.addColorStop(0.65, `rgba(${r},${g},${b},0.9)`);
-  hg.addColorStop(1, `rgba(${Math.max(0, r - 50)}, ${Math.max(0, g - 50)}, ${Math.max(0, b - 40)}, 0.95)`);
-  ctx.fillStyle = hg;
+  ctx.fillStyle = "#ffffff";
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.arc(hx, hy, hubR - 3.5, 0, Math.PI * 2);
+  ctx.strokeStyle = hubC;
+  ctx.globalAlpha = 0.9;
   ctx.lineWidth = 2;
-  ctx.shadowBlur = 18;
-  ctx.shadowColor = `rgba(${r},${g},${b},0.45)`;
   ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+  ctx.strokeStyle = "rgba(117, 99, 164, 0.16)";
   ctx.lineWidth = 1;
   ctx.stroke();
   gfDrawHubName(ctx, member, hx, hy, hubR - 5, labelAlpha, labelPop);
@@ -1643,15 +1637,15 @@ __galaxyMotionMql.addEventListener?.("change", (e) => {
   __galaxyReducedMotion = !!e.matches;
 });
 
-/** Shared canvas tokens — dark HUD / neon dataviz. */
+/** Shared canvas tokens — align with light page / cards (Geo Atlas UI). */
 const CANVAS_FONT_MEMBER_NAMES = '600 11px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
 const CANVAS_FONT_MEMBER_PIN = '600 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
-const CANVAS_TEXT_MEMBER = "rgba(244, 242, 255, 0.96)";
-const CANVAS_TEXT_MEMBER_MUTED = "rgba(200, 195, 220, 0.88)";
+const CANVAS_TEXT_MEMBER = "rgba(32, 28, 44, 0.94)";
+const CANVAS_TEXT_MEMBER_MUTED = "rgba(55, 50, 72, 0.78)";
 
 let __galaxyGrainPattern = null;
 let __galaxyGrainBuildId = "";
-const GALAXY_GRAIN_BUILD_ID = "dark-v2";
+const GALAXY_GRAIN_BUILD_ID = "light-v3";
 function ensureGalaxyGrainPattern(targetCtx) {
   if (canvasReducedMotion()) return null;
   if (__galaxyGrainPattern && __galaxyGrainBuildId === GALAXY_GRAIN_BUILD_ID) return __galaxyGrainPattern;
@@ -1662,13 +1656,12 @@ function ensureGalaxyGrainPattern(targetCtx) {
   c.height = n;
   const g = c.getContext("2d");
   if (!g) return null;
-  g.fillStyle = "rgba(0,0,0,0)";
-  g.fillRect(0, 0, n, n);
-  for (let i = 0; i < 160; i += 1) {
+  g.clearRect(0, 0, n, n);
+  for (let i = 0; i < 130; i += 1) {
     const x = (i * 37 + (i % 5)) % n;
     const y = (i * 19 + ((i * 3) % 7)) % n;
-    const a = 0.04 + (i % 5) * 0.028;
-    g.fillStyle = `rgba(230, 228, 255, ${a})`;
+    const a = 0.028 + (i % 6) * 0.009;
+    g.fillStyle = `rgba(88, 72, 130, ${a})`;
     g.fillRect(x, y, 1, 1);
   }
   __galaxyGrainPattern = targetCtx.createPattern(c, "repeat");
@@ -1679,37 +1672,32 @@ function ensureGalaxyGrainPattern(targetCtx) {
 function drawGalaxyCanvasAtmosphere(targetCtx, width, height) {
   const cx = width / 2;
   const cy = height / 2;
-  const r = Math.max(width, height) * 0.62;
+  const r = Math.max(width, height) * 0.58;
   const base = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  base.addColorStop(0, "#12111f");
-  base.addColorStop(0.45, "#0a0a12");
-  base.addColorStop(1, "#020208");
+  base.addColorStop(0, "rgba(255, 255, 255, 0.99)");
+  base.addColorStop(0.42, "rgba(252, 249, 255, 0.97)");
+  base.addColorStop(0.78, "rgba(246, 241, 252, 0.94)");
+  base.addColorStop(1, "rgba(248, 244, 253, 0.98)");
   targetCtx.fillStyle = base;
   targetCtx.fillRect(0, 0, width, height);
 
-  const g1 = targetCtx.createRadialGradient(cx * 0.55, cy * 0.32, 0, cx * 0.55, cy * 0.32, r * 0.72);
-  g1.addColorStop(0, "rgba(124, 92, 255, 0.22)");
-  g1.addColorStop(0.45, "rgba(124, 92, 255, 0.06)");
-  g1.addColorStop(1, "rgba(124, 92, 255, 0)");
+  const g1 = targetCtx.createRadialGradient(cx * 0.62, cy * 0.34, 0, cx * 0.62, cy * 0.34, r * 0.55);
+  g1.addColorStop(0, "rgba(138, 99, 255, 0.1)");
+  g1.addColorStop(0.55, "rgba(138, 99, 255, 0.03)");
+  g1.addColorStop(1, "rgba(138, 99, 255, 0)");
   targetCtx.fillStyle = g1;
   targetCtx.fillRect(0, 0, width, height);
 
-  const g2 = targetCtx.createRadialGradient(cx * 1.08, cy * 0.95, 0, cx * 1.08, cy * 0.95, r * 0.55);
-  g2.addColorStop(0, "rgba(56, 189, 248, 0.14)");
-  g2.addColorStop(1, "rgba(56, 189, 248, 0)");
+  const g2 = targetCtx.createRadialGradient(cx * 1.05, cy * 0.88, 0, cx * 1.05, cy * 0.88, r * 0.42);
+  g2.addColorStop(0, "rgba(113, 231, 255, 0.08)");
+  g2.addColorStop(1, "rgba(113, 231, 255, 0)");
   targetCtx.fillStyle = g2;
-  targetCtx.fillRect(0, 0, width, height);
-
-  const g3 = targetCtx.createRadialGradient(cx * 0.9, cy * 0.12, 0, cx * 0.9, cy * 0.12, r * 0.35);
-  g3.addColorStop(0, "rgba(244, 114, 182, 0.1)");
-  g3.addColorStop(1, "rgba(244, 114, 182, 0)");
-  targetCtx.fillStyle = g3;
   targetCtx.fillRect(0, 0, width, height);
 
   const pat = ensureGalaxyGrainPattern(targetCtx);
   if (pat) {
     targetCtx.save();
-    targetCtx.globalAlpha = 0.07;
+    targetCtx.globalAlpha = 0.045;
     targetCtx.fillStyle = pat;
     targetCtx.fillRect(0, 0, width, height);
     targetCtx.restore();
@@ -2523,7 +2511,7 @@ function drawFrame() {
       const ty = member.y + radius + 4;
       ctx.lineJoin = "round";
       ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
       ctx.strokeText(label, tx, ty);
       ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? CANVAS_TEXT_MEMBER : CANVAS_TEXT_MEMBER_MUTED;
       ctx.fillText(label, tx, ty);
@@ -2541,7 +2529,7 @@ function drawFrame() {
       const py = pin.y - radius - 4;
       ctx.lineJoin = "round";
       ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
       ctx.strokeText(pin.name, px, py);
       ctx.fillStyle = CANVAS_TEXT_MEMBER;
       ctx.fillText(pin.name, px, py);
