@@ -430,7 +430,9 @@ function memberOrgGroupLabel(member) {
 }
 
 function memberIsHiddenByTag(member) {
-  return getPersonalBadge(member.entityId) === "black";
+  return String(personalMarks.badges?.[member.entityId] || "")
+    .trim()
+    .toLowerCase() === "black";
 }
 
 function uiMembers() {
@@ -1101,7 +1103,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const DEFAULT_MARKS_JSON_URL = "./geo-atlas-marks-2026-04-21-2.json";
+const DEFAULT_MARKS_JSON_URL = "./geo-atlas-marks-2026-04-21-1.json";
 const BADGE_KEYS = ["blue", "purple", "pink", "red", "green", "yellow", "orange", "black"];
 const BADGE_META = {
   blue: { label: "Core team", hex: "#2563eb" },
