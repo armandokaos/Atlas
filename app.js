@@ -1082,7 +1082,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const BADGE_KEYS = ["blue", "green", "red", "yellow", "purple", "orange"];
+const BADGE_KEYS = ["blue", "green", "red", "yellow", "purple", "orange", "black"];
 const BADGE_META = {
   blue: { label: "Blue", hex: "#2563eb" },
   green: { label: "Green", hex: "#16a34a" },
@@ -1090,6 +1090,7 @@ const BADGE_META = {
   yellow: { label: "Yellow", hex: "#ca8a04" },
   purple: { label: "Purple", hex: "#9333ea" },
   orange: { label: "Orange", hex: "#ea580c" },
+  black: { label: "Black", hex: "#171717" },
 };
 
 const personalMarks = { ratings: {}, badges: {} };

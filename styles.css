@@ -1457,6 +1457,11 @@ h1 {
   background: #ea580c;
 }
 
+.pastille-dot--black {
+  background: #171717;
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
 .detail-markers {
   margin-top: 4px;
   padding: 14px 16px;

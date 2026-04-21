@@ -4,7 +4,7 @@ create table if not exists public.user_marks (
   user_id uuid not null references auth.users (id) on delete cascade,
   entity_id text not null,
   stars smallint null check (stars is null or (stars >= 1 and stars <= 5)),
-  badge text null check (badge is null or badge in ('blue', 'green', 'red', 'yellow', 'purple', 'orange')),
+  badge text null check (badge is null or badge in ('blue', 'green', 'red', 'yellow', 'purple', 'orange', 'black')),
   updated_at timestamptz not null default now(),
   primary key (user_id, entity_id)
 );
