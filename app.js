@@ -1503,9 +1503,7 @@ if (typeof ctx.imageSmoothingQuality === "string") {
   ctx.imageSmoothingQuality = "high";
 }
 const searchInput = document.querySelector("#search-input");
-const themePills = document.querySelector("#theme-pills");
 const spotlightThemeStrip = document.querySelector("#spotlight-theme-strip");
-const orgGroupPills = document.querySelector("#org-group-pills");
 const spotlightOrgStrip = document.querySelector("#spotlight-org-strip");
 const canvasWrap = document.querySelector(".canvas-wrap");
 const rosterGrid = document.querySelector("#roster-grid");
@@ -1515,7 +1513,6 @@ const spotlightFilters = document.querySelector("#spotlight-filters");
 const markerFilters = document.querySelector("#marker-filters");
 const detailPanel = document.querySelector("#detail-panel");
 const detailCard = document.querySelector(".detail-card");
-const selectionSummary = document.querySelector("#selection-summary");
 const rosterCard = document.querySelector(".roster-card");
 const galaxyCardEl = document.querySelector(".galaxy-card");
 const galaxyThemePills = document.querySelector("#galaxy-theme-pills");
@@ -1730,7 +1727,6 @@ function renderOrgGroupPillsInto(container, compact) {
 }
 
 function buildOrgGroupPills() {
-  renderOrgGroupPillsInto(orgGroupPills, false);
   renderOrgGroupPillsInto(spotlightOrgStrip, true);
 }
 
@@ -1836,7 +1832,6 @@ function renderGalaxyViewChrome() {
 }
 
 function buildThemePills() {
-  renderThemePillsInto(themePills, false);
   renderThemePillsInto(spotlightThemeStrip, true);
   buildOrgGroupPills();
   renderGalaxyViewChrome();
@@ -2091,33 +2086,6 @@ function truncateGalaxyLabel(name, max = 20) {
   if (!name) return "";
   if (name.length <= max) return name;
   return `${name.slice(0, max - 1).trim()}…`;
-}
-
-function updateSummary(list) {
-  const count = list.length;
-  const activeTheme = state.theme === "all" ? "all themes" : state.theme;
-  const activeOrgLabel = state.orgGroup === "all" ? "" : ORG_GROUP_LABEL_BY_KEY[state.orgGroup] || "";
-  const marks =
-    state.starFilter !== "all" || state.badgeFilter !== "all"
-      ? ", with your star and tag filters applied"
-      : "";
-  const defaultBlurb =
-    state.starFilter === "all" &&
-    state.badgeFilter === "all" &&
-    count === members.length &&
-    state.theme === "all" &&
-    state.orgGroup === "all" &&
-    state.skillGalaxy === "all" &&
-    !state.query;
-  if (defaultBlurb) {
-    selectionSummary.textContent = `${formatNumber(count)} profiles with bios, grouped by shared themes.`;
-    return;
-  }
-  const bits = [];
-  if (activeOrgLabel) bits.push(activeOrgLabel);
-  if (state.theme !== "all") bits.push(activeTheme);
-  const filterPhrase = bits.length ? bits.join(" · ") : "current filters";
-  selectionSummary.textContent = `${formatNumber(count)} profiles match ${filterPhrase}${state.query ? ` · search “${state.query}”` : ""}${marks}.`;
 }
 
 function anchorMap(list, width, height) {
@@ -2431,7 +2399,6 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
   const chosen = selectedMember(vis);
   if (chosen) state.selectedId = chosen.entityId;
   else state.selectedId = null;
-  updateSummary(vis);
   renderDetail(chosen);
   renderRoster(base);
   snapSingleThemeVogelPositions(vis);
@@ -2507,13 +2474,11 @@ function onOrgGroupPillClick(event) {
   syncUI();
 }
 
-themePills.addEventListener("click", onThemePillClick);
 if (spotlightThemeStrip) {
   spotlightThemeStrip.addEventListener("click", onThemePillClick);
 }
 if (galaxyThemePills) galaxyThemePills.addEventListener("click", onThemePillClick);
 
-if (orgGroupPills) orgGroupPills.addEventListener("click", onOrgGroupPillClick);
 if (spotlightOrgStrip) spotlightOrgStrip.addEventListener("click", onOrgGroupPillClick);
 if (galaxyOrgPills) galaxyOrgPills.addEventListener("click", onOrgGroupPillClick);
 
