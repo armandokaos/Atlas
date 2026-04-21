@@ -267,7 +267,6 @@ const galaxyFocus = {
   snapHubY: 0,
   snapHubR: 0,
   hubTargetR: 48,
-  landscapeDots: [],
   backRect: { x: 14, y: 14, w: 44, h: 44 },
 };
 
@@ -400,17 +399,6 @@ function gfRebuildSkillLayout() {
   galaxyFocus.skillNodes = gfBuildSkillNodes(galaxyFocus.skillsSnapshot, cx, cy, width, height);
 }
 
-function gfSnapshotLandscapeDots(list, focusId, selected, hoveredId) {
-  return list
-    .filter((m) => m.entityId !== focusId)
-    .map((m) => ({
-      x: m.x,
-      y: m.y,
-      color: m.color,
-      r: memberDisplayRadius(m, selected, hoveredId),
-    }));
-}
-
 function startGalaxyPersonFocus(member) {
   if (!member || galaxyFocus.mode !== "landscape") return;
   const skills = memberSkillsList(member);
@@ -434,7 +422,6 @@ function startGalaxyPersonFocus(member) {
     84,
     Math.max(40, dim * 0.078 + Math.min(22, Math.max(0, nameLen - 14) * 1.35)),
   );
-  galaxyFocus.landscapeDots = gfSnapshotLandscapeDots(list, member.entityId, sel, state.hoveredId);
   galaxyFocus.skillNodes = gfBuildSkillNodes(galaxyFocus.skillsSnapshot, cx, cy, width, height);
   gfUpdateBackButtonLayout(width);
   state.selectedId = member.entityId;
@@ -457,7 +444,6 @@ function gfFinishExitToLandscape() {
   galaxyFocus.member = null;
   galaxyFocus.skillsSnapshot = [];
   galaxyFocus.skillNodes = [];
-  galaxyFocus.landscapeDots = [];
   const vis = visibleMembers();
   const chosen = selectedMember(vis);
   if (chosen) state.selectedId = chosen.entityId;
@@ -728,12 +714,14 @@ function gfGalaxyPointerTargets(x, y, now, width, height) {
   return "empty";
 }
 
-function drawGalaxyPersonFocus(width, height, now) {
+function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
   const member = galaxyFocus.member;
   if (!member) {
     gfFinishExitToLandscape();
     return;
   }
+
+  const bgDots = gfBackgroundDotsExcludingFocus(list, member.entityId, selected, hoveredId);
 
   gfDrawFocusBackdrop(ctx, width, height);
 
@@ -752,7 +740,7 @@ function drawGalaxyPersonFocus(width, height, now) {
 
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.85;
-    galaxyFocus.landscapeDots.forEach((d) => {
+    bgDots.forEach((d) => {
       ctx.beginPath();
       ctx.fillStyle = `${d.color}99`;
       ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
@@ -773,6 +761,15 @@ function drawGalaxyPersonFocus(width, height, now) {
   }
 
   if (galaxyFocus.mode === "person") {
+    ctx.save();
+    ctx.globalAlpha = 0.14;
+    bgDots.forEach((d) => {
+      ctx.beginPath();
+      ctx.fillStyle = `${d.color}aa`;
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
     gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.022, now);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now);
@@ -791,7 +788,7 @@ function drawGalaxyPersonFocus(width, height, now) {
 
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.82;
-    galaxyFocus.landscapeDots.forEach((d) => {
+    bgDots.forEach((d) => {
       ctx.beginPath();
       ctx.fillStyle = `${d.color}99`;
       ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
@@ -1740,6 +1737,64 @@ function snapSingleThemeVogelPositions(list) {
   });
 }
 
+/** Même physique que le paysage ; `freezeEntityId` fige un membre (focus perso) pour ne pas bouger son point de sortie. */
+function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null) {
+  const anchors = anchorMap(list, width, height);
+  const singleThemeDisk = anchors.size === 1;
+  const orbitScale = galaxyOrbitScale();
+  const diskHalfW = singleThemeDisk ? Math.max(64, width * 0.5 - 40) : 0;
+  const diskHalfH = singleThemeDisk ? Math.max(64, height * 0.5 - 76) : 0;
+  const layoutPull = 0.012;
+  const layoutDamp = 0.92;
+  const angleDrift = now * 0.00008;
+
+  list.forEach((member, index) => {
+    if (freezeEntityId && member.entityId === freezeEntityId) return;
+    const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
+    const angle = member.seed + index * 0.07 + angleDrift;
+    let targetX;
+    let targetY;
+
+    if (singleThemeDisk) {
+      const n = Math.max(list.length, 1);
+      const idx = index + 1;
+      const golden = idx * 2.39996322972865332;
+      const normR = Math.sqrt(idx / (n + 1));
+      const wobbleX = Math.sin(now * 0.00028 + member.seed * 3.9) * 4;
+      const wobbleY = Math.cos(now * 0.00026 + member.seed * 2.7) * 4;
+      const spin = state.phase * 0.1;
+      const t = golden + spin + angleDrift;
+      targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
+      targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
+    } else {
+      const viewScale = Math.min(1.85, Math.min(width, height) / 520);
+      const orbit = (42 + (index % 12) * 16 + member.spaceCount * 8) * orbitScale * viewScale;
+      targetX = anchor.x + Math.cos(angle) * orbit;
+      targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.72);
+    }
+
+    const curX = Number.isFinite(member.x) ? member.x : targetX;
+    const curY = Number.isFinite(member.y) ? member.y : targetY;
+    member.vx += (targetX - curX) * layoutPull;
+    member.vy += (targetY - curY) * layoutPull;
+    member.vx *= layoutDamp;
+    member.vy *= layoutDamp;
+    member.x = curX + member.vx;
+    member.y = curY + member.vy;
+  });
+}
+
+function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
+  return list
+    .filter((m) => m.entityId !== focusId)
+    .map((m) => ({
+      x: m.x,
+      y: m.y,
+      color: m.color,
+      r: memberDisplayRadius(m, selected, hoveredId),
+    }));
+}
+
 function drawFrame() {
   resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
@@ -1751,8 +1806,12 @@ function drawFrame() {
     if (!stillVisible) {
       gfFinishExitToLandscape();
     } else {
+      const selected = selectedMember(list);
+      const hoveredId = state.hoveredId;
+      stepMemberLayoutPhysics(list, width, height, now, galaxyFocus.memberId);
+      state.phase += 0.0009;
       ctx.clearRect(0, 0, width, height);
-      drawGalaxyPersonFocus(width, height, now);
+      drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId);
       requestAnimationFrame(drawFrame);
       return;
     }
@@ -1806,44 +1865,7 @@ function drawFrame() {
   });
   ctx.restore();
 
-  /** Same soft follow as "All" so category view stays alive, not glued to static Vogel targets. */
-  const layoutPull = 0.012;
-  const layoutDamp = 0.92;
-  const angleDrift = now * 0.00008;
-
-  list.forEach((member, index) => {
-    const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
-    const angle = member.seed + index * 0.07 + angleDrift;
-    let targetX;
-    let targetY;
-
-    if (singleThemeDisk) {
-      const n = Math.max(list.length, 1);
-      const idx = index + 1;
-      const golden = idx * 2.39996322972865332;
-      const normR = Math.sqrt(idx / (n + 1));
-      const wobbleX = Math.sin(performance.now() * 0.00028 + member.seed * 3.9) * 4;
-      const wobbleY = Math.cos(performance.now() * 0.00026 + member.seed * 2.7) * 4;
-      const spin = state.phase * 0.1;
-      const t = golden + spin + angleDrift;
-      targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
-      targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
-    } else {
-      const viewScale = Math.min(1.85, Math.min(width, height) / 520);
-      const orbit = (42 + (index % 12) * 16 + member.spaceCount * 8) * orbitScale * viewScale;
-      targetX = anchor.x + Math.cos(angle) * orbit;
-      targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.72);
-    }
-
-    const curX = Number.isFinite(member.x) ? member.x : targetX;
-    const curY = Number.isFinite(member.y) ? member.y : targetY;
-    member.vx += (targetX - curX) * layoutPull;
-    member.vy += (targetY - curY) * layoutPull;
-    member.vx *= layoutDamp;
-    member.vy *= layoutDamp;
-    member.x = curX + member.vx;
-    member.y = curY + member.vy;
-  });
+  stepMemberLayoutPhysics(list, width, height, now, null);
 
   list.forEach((member) => {
     const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
