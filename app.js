@@ -249,8 +249,8 @@ const state = {
 
 /** Immersive person → skills constellation (canvas-only). See plan: focus_personne_canvas */
 const GALAXY_FOCUS_MAX_SKILLS = 12;
-const GALAXY_FOCUS_ENTER_MS = 2300;
-const GALAXY_FOCUS_EXIT_MS = 1900;
+const GALAXY_FOCUS_ENTER_MS = 2000;
+const GALAXY_FOCUS_EXIT_MS = 1700;
 const GF_FADE_END = 0.11;
 const GF_MOVE_END = 0.52;
 const GF_GROW_END = 0.68;
@@ -471,56 +471,25 @@ function gfLerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function gfHexToRgb(hex) {
-  const h = String(hex || "").replace("#", "");
-  if (h.length === 6) {
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    if (!Number.isNaN(r + g + b)) return { r, g, b };
-  }
-  return { r: 116, g: 71, b: 245 };
-}
-
-/** Décalage organique des nœuds skills (person) — même logique pour dessin, liens et hit-test. */
+/** Micro-décalage optionnel (presque statique) — liens et hit-test alignés. */
 function gfSkillNodeFloat(node, index, now) {
   if (galaxyFocus.mode !== "person") return { ox: 0, oy: 0 };
-  const t = now * 0.00031;
-  const ph = node.golden + index * 0.73;
-  return {
-    ox: Math.sin(t + ph) * 3.4 + Math.cos(t * 0.84 + ph * 1.27) * 1.7,
-    oy: Math.cos(t * 0.91 + ph) * 3.0 + Math.sin(t * 0.68 + ph * 1.09) * 1.5,
-  };
+  const t = now * 0.00008;
+  const ph = node.golden + index * 0.5;
+  return { ox: Math.sin(t + ph) * 0.55, oy: Math.cos(t * 0.9 + ph) * 0.5 };
 }
 
-function gfDrawFocusBackdrop(ctx, width, height, now) {
+/** Fond neutre type produit SaaS — pas de « mesh » ni halos multiples. */
+function gfDrawFocusBackdrop(ctx, width, height) {
+  ctx.fillStyle = "#f3f2f6";
+  ctx.fillRect(0, 0, width, height);
   const cx = width / 2;
   const cy = height / 2;
-  const pulse = 0.92 + 0.08 * Math.sin(now * 0.00012);
-  const g0 = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.55);
-  g0.addColorStop(0, `rgba(250, 248, 255, ${0.98 * pulse})`);
-  g0.addColorStop(0.35, "rgba(244, 238, 255, 0.94)");
-  g0.addColorStop(0.72, "rgba(235, 248, 252, 0.88)");
-  g0.addColorStop(1, "rgba(248, 246, 252, 0.99)");
-  ctx.fillStyle = g0;
-  ctx.fillRect(0, 0, width, height);
-
-  const g1 = ctx.createRadialGradient(cx * 0.72, cy * 0.35, 0, cx, cy, height * 0.62);
-  g1.addColorStop(0, "rgba(186, 148, 255, 0.14)");
-  g1.addColorStop(0.45, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = g1;
-  ctx.fillRect(0, 0, width, height);
-
-  const g2 = ctx.createRadialGradient(cx * 1.1, cy * 1.05, 0, cx, cy, width * 0.5);
-  g2.addColorStop(0, "rgba(120, 200, 255, 0.1)");
-  g2.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = g2;
-  ctx.fillRect(0, 0, width, height);
-
-  const v = ctx.createRadialGradient(cx, cy, height * 0.25, cx, cy, height * 0.65);
-  v.addColorStop(0, "rgba(255, 255, 255, 0)");
-  v.addColorStop(1, "rgba(120, 110, 150, 0.06)");
-  ctx.fillStyle = v;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.48);
+  g.addColorStop(0, "rgba(255, 255, 255, 0.65)");
+  g.addColorStop(0.55, "rgba(255, 255, 255, 0)");
+  g.addColorStop(1, "rgba(0, 0, 0, 0.02)");
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, width, height);
 }
 
@@ -528,19 +497,14 @@ function gfDrawBackButton(ctx) {
   const { x, y, w, h } = galaxyFocus.backRect;
   ctx.save();
   ctx.beginPath();
-  gfRoundRectPath(ctx, x, y, w, h, 14);
-  const bg = ctx.createLinearGradient(x, y, x + w, y + h);
-  bg.addColorStop(0, "rgba(255, 255, 255, 0.78)");
-  bg.addColorStop(1, "rgba(248, 244, 255, 0.88)");
-  ctx.fillStyle = bg;
+  gfRoundRectPath(ctx, x, y, w, h, 10);
+  ctx.fillStyle = "#ffffff";
   ctx.fill();
-  ctx.strokeStyle = "rgba(124, 92, 200, 0.22)";
+  ctx.strokeStyle = "rgba(15, 12, 24, 0.1)";
   ctx.lineWidth = 1;
   ctx.stroke();
-  ctx.shadowBlur = 18;
-  ctx.shadowColor = "rgba(124, 92, 200, 0.18)";
-  ctx.strokeStyle = "rgba(52, 46, 72, 0.45)";
-  ctx.lineWidth = 1.85;
+  ctx.strokeStyle = "rgba(15, 12, 24, 0.55)";
+  ctx.lineWidth = 1.5;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const cx = x + w * 0.52;
@@ -550,14 +514,12 @@ function gfDrawBackButton(ctx) {
   ctx.lineTo(cx - 3, cy);
   ctx.lineTo(cx + 4, cy + 6);
   ctx.stroke();
-  ctx.shadowBlur = 0;
   ctx.restore();
 }
 
-function gfDrawSkillLinks(ctx, member, hx, hy, hubR, nodes, linksAlpha, dashPhase, now) {
+function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now) {
   if (linksAlpha <= 0.02) return;
-  const hubRgb = gfHexToRgb(member?.color);
-  const hubEdge = hubR + 2;
+  const hubEdge = hubR + 1.5;
   nodes.forEach((node, index) => {
     const { ox, oy } = gfSkillNodeFloat(node, index, now);
     const tx = node.tx + ox;
@@ -572,41 +534,27 @@ function gfDrawSkillLinks(ctx, member, hx, hy, hubR, nodes, linksAlpha, dashPhas
     const nr = node.isMore ? 5 : 5 + Math.min(6, String(node.name).length * 0.32);
     const ex = tx - ux * nr;
     const ey = ty - uy * nr;
-    const bend = dist * 0.11;
+    const bend = dist * 0.065;
     const mx = (sx + ex) / 2 - uy * bend;
     const my = (sy + ey) / 2 + ux * bend;
     ctx.save();
-    ctx.globalAlpha = linksAlpha * 0.92;
-    const lg = ctx.createLinearGradient(sx, sy, ex, ey);
-    lg.addColorStop(0, `rgba(${hubRgb.r},${hubRgb.g},${hubRgb.b},0.42)`);
-    lg.addColorStop(0.55, "rgba(124, 92, 200, 0.22)");
-    lg.addColorStop(1, "rgba(124, 92, 200, 0.08)");
+    ctx.globalAlpha = linksAlpha * 0.9;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.quadraticCurveTo(mx, my, ex, ey);
-    ctx.strokeStyle = lg;
-    ctx.lineWidth = 7;
+    ctx.strokeStyle = "rgba(15, 12, 24, 0.1)";
+    ctx.lineWidth = 2.25;
     ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.shadowBlur = 14;
-    ctx.shadowColor = "rgba(124, 92, 200, 0.25)";
     ctx.stroke();
-    ctx.shadowBlur = 0;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.quadraticCurveTo(mx, my, ex, ey);
-    ctx.setLineDash([1, 7]);
+    ctx.setLineDash([3, 6]);
     ctx.lineDashOffset = dashPhase;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
-    ctx.lineWidth = 1.15;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.quadraticCurveTo(mx, my, ex, ey);
-    ctx.strokeStyle = "rgba(88, 72, 120, 0.2)";
+    ctx.strokeStyle = "rgba(15, 12, 24, 0.16)";
     ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
   });
   ctx.lineDashOffset = 0;
@@ -614,52 +562,39 @@ function gfDrawSkillLinks(ctx, member, hx, hy, hubR, nodes, linksAlpha, dashPhas
 
 function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
   nodes.forEach((node, index) => {
-    const stagger = index * 0.042;
+    const stagger = index * 0.04;
     const rawA = Math.max(0, Math.min(1, (skillsAlpha - stagger) / (1 - stagger + 0.001)));
     if (rawA <= 0.01) return;
     const a = gfEaseOutCubic(rawA);
-    const pop = Math.min(1, gfEaseOutBack(Math.min(1, rawA * 1.08), 1.22));
+    const pop = gfEaseOutCubic(Math.min(1, rawA * 1.15));
     const { ox, oy } = gfSkillNodeFloat(node, index, now);
     const x = node.tx + ox;
     const y = node.ty + oy;
-    const nr = node.isMore ? 5 : 5 + Math.min(7, String(node.name).length * 0.38);
-    const rDraw = nr * (0.28 + 0.72 * pop);
+    const nr = node.isMore ? 5 : 5 + Math.min(7, String(node.name).length * 0.36);
+    const rDraw = nr * (0.2 + 0.8 * pop);
     ctx.save();
     ctx.globalAlpha = a;
-    const g = ctx.createRadialGradient(x - nr * 0.35, y - nr * 0.35, 0, x, y, nr * 1.15);
-    g.addColorStop(0, "rgba(255, 255, 255, 0.55)");
-    g.addColorStop(0.45, node.color);
-    g.addColorStop(1, node.color);
     ctx.beginPath();
-    ctx.fillStyle = g;
-    ctx.shadowBlur = 20 * a;
-    ctx.shadowColor = "rgba(90, 70, 140, 0.35)";
+    ctx.fillStyle = "#ffffff";
     ctx.arc(x, y, rDraw, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
-    ctx.lineWidth = 1.15;
+    ctx.strokeStyle = "rgba(15, 12, 24, 0.08)";
+    ctx.lineWidth = 1;
     ctx.arc(x, y, rDraw, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(40, 32, 60, 0.12)";
-    ctx.lineWidth = 1;
-    ctx.arc(x, y, rDraw - 0.6, 0, Math.PI * 2);
+    ctx.strokeStyle = node.color;
+    ctx.lineWidth = 2;
+    ctx.arc(x, y, rDraw - 0.5, 0, Math.PI * 2);
     ctx.stroke();
     const label = truncateGalaxyLabel(node.name, 22);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.font = '500 11px ui-sans-serif, system-ui, "Avenir Next", "Segoe UI", sans-serif';
-    if (typeof ctx.letterSpacing === "string") ctx.letterSpacing = "0.02em";
-    const ty = y + rDraw + 6;
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 2.8;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
-    ctx.strokeText(label, x, ty);
-    ctx.fillStyle = "rgba(28, 24, 42, 0.88)";
+    ctx.font = '500 11px ui-sans-serif, system-ui, -apple-system, sans-serif';
+    const ty = y + rDraw + 7;
+    ctx.fillStyle = "rgba(15, 12, 24, 0.78)";
     ctx.fillText(label, x, ty);
-    if (typeof ctx.letterSpacing === "string") ctx.letterSpacing = "0px";
     ctx.restore();
   });
 }
@@ -667,7 +602,7 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
 function gfFitHubNameLines(ctx, name, maxW, maxH) {
   const clean = String(name || "—").trim() || "—";
   for (let fontPx = 12.5; fontPx >= 7; fontPx -= 0.5) {
-    ctx.font = `600 ${fontPx}px ui-sans-serif, system-ui, "Avenir Next", "Segoe UI", sans-serif`;
+    ctx.font = `500 ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
     const words = clean.split(/\s+/).filter(Boolean);
     const lines = [];
     let cur = "";
@@ -688,20 +623,20 @@ function gfFitHubNameLines(ctx, name, maxW, maxH) {
     const lineHeight = fontPx * 1.22;
     if (lines.length * lineHeight <= maxH) return { lines, fontPx, lineHeight };
   }
-  ctx.font = '600 7px ui-sans-serif, system-ui, "Avenir Next", "Segoe UI", sans-serif';
+  ctx.font = '500 7px ui-sans-serif, system-ui, -apple-system, sans-serif';
   return { lines: [truncateGalaxyLabel(clean, 30)], fontPx: 7, lineHeight: 9 };
 }
 
 function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   if (labelAlpha <= 0.02) return;
-  const padX = 12;
-  const padY = 11;
+  const padX = 14;
+  const padY = 12;
   const maxW = Math.max(40, hubR * 2 - padX * 2);
   const maxH = Math.max(28, hubR * 2 - padY * 2);
   const { lines, fontPx, lineHeight } = gfFitHubNameLines(ctx, member.name, maxW, maxH);
   const totalH = lines.length * lineHeight;
   const yStart = hy - totalH / 2 + lineHeight * 0.72;
-  const pop = 0.94 + 0.06 * Math.min(1, Math.max(0, labelPop));
+  const pop = 0.97 + 0.03 * Math.min(1, Math.max(0, labelPop));
   ctx.save();
   ctx.globalAlpha = labelAlpha;
   ctx.translate(hx, hy);
@@ -709,75 +644,35 @@ function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   ctx.translate(-hx, -hy);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `600 ${fontPx}px ui-sans-serif, system-ui, "Avenir Next", "Segoe UI", sans-serif`;
-  if (typeof ctx.letterSpacing === "string") ctx.letterSpacing = "0.03em";
-  ctx.lineJoin = "round";
-  const sw = Math.max(1.8, fontPx * 0.22);
+  ctx.font = `500 ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
+  ctx.fillStyle = "rgba(15, 12, 24, 0.88)";
   lines.forEach((line, i) => {
     const ly = yStart + i * lineHeight;
-    ctx.lineWidth = sw + 1.2;
-    ctx.strokeStyle = "rgba(24, 18, 36, 0.35)";
-    ctx.strokeText(line, hx, ly);
-    ctx.lineWidth = sw;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
-    ctx.strokeText(line, hx, ly);
-    ctx.fillStyle = "rgba(255, 252, 250, 0.97)";
     ctx.fillText(line, hx, ly);
   });
-  if (typeof ctx.letterSpacing === "string") ctx.letterSpacing = "0px";
   ctx.restore();
 }
 
 function gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   const hubC = member.color || "#7447f5";
-  const hexOk = /^#[0-9A-Fa-f]{6}$/i.test(String(hubC).trim());
-  const { r, g, b } = hexOk ? gfHexToRgb(hubC) : { r: 116, g: 71, b: 245 };
   ctx.save();
   ctx.beginPath();
-  ctx.arc(hx, hy, hubR + 18, 0, Math.PI * 2);
-  const outer = ctx.createRadialGradient(hx, hy, hubR * 0.2, hx, hy, hubR + 18);
-  outer.addColorStop(0, hexOk ? `rgba(${r},${g},${b},0.18)` : "rgba(116, 71, 245, 0.14)");
-  outer.addColorStop(0.55, "rgba(255, 255, 255, 0.35)");
-  outer.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = outer;
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(hx, hy, hubR + 2.5, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
-  ctx.lineWidth = 1.25;
-  ctx.stroke();
-
-  ctx.beginPath();
-  const body = ctx.createRadialGradient(hx - hubR * 0.38, hy - hubR * 0.42, hubR * 0.05, hx, hy, hubR);
-  if (hexOk) {
-    body.addColorStop(0, `rgba(${Math.min(255, r + 55)},${Math.min(255, g + 50)},${Math.min(255, b + 45)},1)`);
-    body.addColorStop(0.55, hubC);
-    body.addColorStop(1, `rgba(${Math.max(0, r - 35)},${Math.max(0, g - 30)},${Math.max(0, b - 25)},1)`);
-  } else {
-    body.addColorStop(0, hubC);
-    body.addColorStop(0.72, hubC);
-    body.addColorStop(1, hubC);
-  }
-  ctx.fillStyle = body;
-  ctx.shadowBlur = 32;
-  ctx.shadowColor = hexOk ? `rgba(${r},${g},${b},0.45)` : "rgba(90, 70, 140, 0.35)";
   ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
   ctx.fill();
-  ctx.shadowBlur = 0;
-
   ctx.beginPath();
-  ctx.arc(hx, hy, hubR - 1, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+  ctx.arc(hx, hy, hubR - 3.5, 0, Math.PI * 2);
+  ctx.strokeStyle = hubC;
+  ctx.globalAlpha = 0.88;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(15, 12, 24, 0.09)";
   ctx.lineWidth = 1;
   ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(hx - hubR * 0.35, hy - hubR * 0.38, hubR * 0.45, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.fill();
-
-  gfDrawHubName(ctx, member, hx, hy, hubR - 4, labelAlpha, labelPop);
+  gfDrawHubName(ctx, member, hx, hy, hubR - 5, labelAlpha, labelPop);
   ctx.restore();
 }
 
@@ -785,16 +680,15 @@ function gfCurrentHubGeometry(now, width, height) {
   const cx = width / 2;
   const cy = height / 2;
   if (galaxyFocus.mode === "person") {
-    const breath = Math.sin(now * 0.00045) * 0.018 + Math.sin(now * 0.00021) * 0.008;
+    const breath = Math.sin(now * 0.00025) * 0.004;
     return { hx: cx, hy: cy, hubR: galaxyFocus.hubTargetR * (1 + breath), hubGrowT: 1 };
   }
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
     const uMove = Math.min(1, p / GF_MOVE_END);
-    const hubPosT = gfEaseInOutCubic(uMove) * 0.72 + gfEaseOutCubic(uMove) * 0.28;
-    const growRaw = gfEaseInOutCubic(Math.max(0, Math.min(1, (p - 0.02) / (GF_GROW_END - 0.02))));
-    const growEased = Math.min(1.08, gfEaseOutBack(growRaw, 1.65));
-    const hubR = gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, growEased);
+    const hubPosT = gfEaseInOutCubic(uMove);
+    const growRaw = gfEaseInOutCubic(Math.max(0, Math.min(1, (p - 0.04) / (GF_GROW_END - 0.04))));
+    const hubR = gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, growRaw);
     return {
       hx: gfLerp(galaxyFocus.snapHubX, cx, hubPosT),
       hy: gfLerp(galaxyFocus.snapHubY, cy, hubPosT),
@@ -805,8 +699,8 @@ function gfCurrentHubGeometry(now, width, height) {
   if (galaxyFocus.mode === "exit") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_EXIT_MS);
     const q = 1 - p;
-    const hubPosT = gfEaseInOutCubic(q) * 0.65 + gfEaseOutCubic(q) * 0.35;
-    const shrinkT = gfEaseOutCubic(q);
+    const hubPosT = gfEaseInOutCubic(q);
+    const shrinkT = gfEaseInOutCubic(q);
     const hubR = gfLerp(galaxyFocus.snapHubR, galaxyFocus.hubTargetR, shrinkT);
     return {
       hx: gfLerp(galaxyFocus.snapHubX, cx, hubPosT),
@@ -823,7 +717,6 @@ function gfGalaxyPointerTargets(x, y, now, width, height) {
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR } = geo;
   if (Math.hypot(x - hx, y - hy) <= hubR + 16) return "hub";
-  const spin = now * 0.00004;
   for (let i = 0; i < galaxyFocus.skillNodes.length; i += 1) {
     const node = galaxyFocus.skillNodes[i];
     const { ox, oy } = gfSkillNodeFloat(node, i, now);
@@ -842,9 +735,9 @@ function drawGalaxyPersonFocus(width, height, now) {
     return;
   }
 
-  gfDrawFocusBackdrop(ctx, width, height, now);
+  gfDrawFocusBackdrop(ctx, width, height);
 
-  const spin = now * 0.000025;
+  const spin = 0;
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR, hubGrowT } = geo;
 
@@ -857,27 +750,18 @@ function drawGalaxyPersonFocus(width, height, now) {
     const labelAlpha = gfSmoothstep01(Math.max(0, Math.min(1, (p - 0.24) / 0.4)));
     const labelPop = gfEaseOutCubic(Math.max(0, Math.min(1, (p - 0.26) / 0.36)));
 
-    const wash = Math.min(1, p / 0.08) * (1 - Math.min(1, p / 0.38));
-    if (wash > 0.02) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.12 * wash})`;
-      ctx.fillRect(0, 0, width, height);
-    }
-
     ctx.save();
-    ctx.globalAlpha = fadeLand;
+    ctx.globalAlpha = fadeLand * 0.85;
     galaxyFocus.landscapeDots.forEach((d) => {
       ctx.beginPath();
-      ctx.fillStyle = `${d.color}cc`;
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = d.color;
+      ctx.fillStyle = `${d.color}99`;
       ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     });
     ctx.restore();
 
     gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
-    gfDrawSkillLinks(ctx, member, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.038, now);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
     gfDrawBackButton(ctx);
 
@@ -890,7 +774,7 @@ function drawGalaxyPersonFocus(width, height, now) {
 
   if (galaxyFocus.mode === "person") {
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
-    gfDrawSkillLinks(ctx, member, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.038, now);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.022, now);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now);
     gfDrawBackButton(ctx);
     return;
@@ -906,20 +790,17 @@ function drawGalaxyPersonFocus(width, height, now) {
     const labelPop = gfSmoothstep01(Math.max(0, q * 1.02));
 
     ctx.save();
-    ctx.globalAlpha = fadeLand * 0.95;
+    ctx.globalAlpha = fadeLand * 0.82;
     galaxyFocus.landscapeDots.forEach((d) => {
       ctx.beginPath();
-      ctx.fillStyle = `${d.color}cc`;
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = d.color;
+      ctx.fillStyle = `${d.color}99`;
       ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     });
     ctx.restore();
 
     gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
-    gfDrawSkillLinks(ctx, member, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.038, now);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now);
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
     gfDrawBackButton(ctx);
 
