@@ -242,6 +242,9 @@ function normalizeMemberSkills(raw) {
 
 const GALAXY_SKILL_OTHER = "__galaxy_other__";
 
+/** How many distinct skill clusters the Skills galaxy mode shows (by global frequency). */
+const GALAXY_VIZ_SKILL_COUNT = 24;
+
 const GALAXY_SKILL_HEX = [
   "#7c3aed",
   "#2563eb",
@@ -255,6 +258,18 @@ const GALAXY_SKILL_HEX = [
   "#16a34a",
   "#9333ea",
   "#0891b2",
+  "#ea580c",
+  "#0f766e",
+  "#be185d",
+  "#4d7c0f",
+  "#b45309",
+  "#1d4ed8",
+  "#a21caf",
+  "#0e7490",
+  "#c026d3",
+  "#65a30d",
+  "#e11d48",
+  "#0369a1",
 ];
 
 const membersSourceFiltered = data.members
@@ -276,7 +291,7 @@ const __galaxySkillFreq = (() => {
 
 const GALAXY_TOP_SKILL_KEYS = [...__galaxySkillFreq.entries()]
   .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-  .slice(0, 12)
+  .slice(0, GALAXY_VIZ_SKILL_COUNT)
   .map(([k]) => k);
 
 const GALAXY_SKILL_LABEL_BY_KEY = new Map();
@@ -394,7 +409,7 @@ const state = {
   query: "",
   theme: "all",
   orgGroup: "all",
-  /** Galaxy layout: `category` (theme), `team` (org), `skills` (top 12 skills). */
+  /** Galaxy layout: `category` (theme), `team` (org), `skills` (top N recurrent skills). */
   galaxyViewMode: "category",
   /** When `galaxyViewMode === "skills"`, which skill cluster is emphasized (matches `skillClusterKey`). */
   skillGalaxy: "all",
