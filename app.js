@@ -1020,24 +1020,31 @@ function gfCurrentHubGeometry(now, width, height) {
   return { hx: cx, hy: cy, hubR: galaxyFocus.hubTargetR, hubGrowT: 1 };
 }
 
-function gfGalaxyPointerTargets(x, y, now, width, height) {
-  if (gfHitBackButton(x, y)) return "back";
+function gfGalaxySkillNodeHitIndex(x, y, now, width, height) {
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR } = geo;
   const cx0 = width / 2;
   const cy0 = height / 2;
   const grpOx = galaxyFocus.mode === "person" ? hx - cx0 : 0;
   const grpOy = galaxyFocus.mode === "person" ? hy - cy0 : 0;
-  if (Math.hypot(x - hx, y - hy) <= hubR + 16) return "hub";
+  if (Math.hypot(x - hx, y - hy) <= hubR + 16) return -1;
   for (let i = 0; i < galaxyFocus.skillNodes.length; i += 1) {
     const node = galaxyFocus.skillNodes[i];
     const { ox, oy } = gfSkillNodeFloat(node, i, now);
     const nx = node.tx + ox + grpOx;
     const ny = node.ty + oy + grpOy;
     const nr = gfSkillNodeRadius(node);
-    if (Math.hypot(x - nx, y - ny) <= nr + 20) return "skill";
+    if (Math.hypot(x - nx, y - ny) <= nr + 20) return i;
   }
-  return "empty";
+  return -1;
+}
+
+function gfGalaxyPointerTargets(x, y, now, width, height) {
+  if (gfHitBackButton(x, y)) return "back";
+  const geo = gfCurrentHubGeometry(now, width, height);
+  const { hx, hy, hubR } = geo;
+  if (Math.hypot(x - hx, y - hy) <= hubR + 16) return "hub";
+  return gfGalaxySkillNodeHitIndex(x, y, now, width, height) >= 0 ? "skill" : "empty";
 }
 
 function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
@@ -1591,6 +1598,7 @@ const rosterCard = document.querySelector(".roster-card");
 const galaxyCardEl = document.querySelector(".galaxy-card");
 const galaxyThemePills = document.querySelector("#galaxy-theme-pills");
 const galaxyOrgPills = document.querySelector("#galaxy-org-pills");
+const galaxySkillPills = document.querySelector("#galaxy-skill-pills");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -1618,6 +1626,17 @@ function memberMatchesGalaxyRollupFilters(member) {
   const haystack = `${member.name} ${member.description} ${member.theme} ${memberOrgGroupLabel(member)} ${skillsHay}`.toLowerCase();
   const matchQuery = !query || haystack.includes(query);
   return matchTheme && matchOrg && matchQuery;
+}
+
+/** Read pill `data-skill-galaxy` (literal attribute) so decoding never throws on odd `%` sequences. */
+function readSkillGalaxyPillKey(el) {
+  const raw = el.getAttribute("data-skill-galaxy");
+  if (raw == null || raw === "" || raw === "all") return "all";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 /** Skills galaxy filter: top keys = anyone who lists that skill; Other = cluster-only bucket. */
@@ -2563,12 +2582,16 @@ if (galaxyCardEl) {
       }
       return;
     }
+  });
+}
+
+if (galaxySkillPills) {
+  galaxySkillPills.addEventListener("click", (event) => {
     const sk = event.target.closest("[data-skill-galaxy]");
-    if (sk) {
-      const raw = sk.dataset.skillGalaxy;
-      state.skillGalaxy = raw === "all" ? "all" : decodeURIComponent(raw);
-      syncUI();
-    }
+    if (!sk || !galaxySkillPills.contains(sk)) return;
+    event.stopPropagation();
+    state.skillGalaxy = readSkillGalaxyPillKey(sk);
+    syncUI();
   });
 }
 
@@ -2649,7 +2672,21 @@ canvas.addEventListener("click", (event) => {
       requestGalaxyPersonExit();
       return;
     }
-    if (zone === "hub" || zone === "skill") return;
+    if (zone === "skill") {
+      const idx = gfGalaxySkillNodeHitIndex(x, y, now, width, height);
+      const node = idx >= 0 ? galaxyFocus.skillNodes[idx] : null;
+      if (node && !node.isMore) {
+        const skillKey = String(node.name).trim().toLowerCase();
+        if (GALAXY_TOP_SKILL_KEYS.includes(skillKey)) {
+          state.galaxyViewMode = "skills";
+          state.skillGalaxy = skillKey;
+          syncUI();
+          return;
+        }
+      }
+      return;
+    }
+    if (zone === "hub") return;
     requestGalaxyPersonExit();
     return;
   }
