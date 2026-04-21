@@ -265,7 +265,7 @@ const members = data.members
       y: 0,
       vx: 0,
       vy: 0,
-      radius: 12 + Math.min(28, spaceCount * 2.35 + member.descLength / 48),
+      radius: 7 + Math.min(19, spaceCount * 1.42 + member.descLength / 58),
       seed: index * 0.37,
     };
   });
@@ -1783,8 +1783,20 @@ function isGalaxyThemeFocus() {
   return state.theme !== "all";
 }
 
+/** Plafond rayon pastille constellation — garder aligné avec les marges disque Vogel. */
+const GALAXY_MEMBER_R_CAP = 52;
+
+/** Demi-axes du disque Vogel (un seul thème) : marge pour grosses pastilles + labels. */
+function galaxySingleDiskHalfExtents(width, height) {
+  const edge = 40 + GALAXY_MEMBER_R_CAP * 0.45;
+  return {
+    diskHalfW: Math.max(96, width * 0.47 - edge),
+    diskHalfH: Math.max(92, height * 0.43 - edge),
+  };
+}
+
 function galaxyOrbitScale() {
-  return isGalaxyThemeFocus() ? 2.55 : 1;
+  return isGalaxyThemeFocus() ? 1.92 : 1;
 }
 
 function memberIsGalaxyHighlighted(member, selected, hoveredId) {
@@ -1800,10 +1812,10 @@ function memberDisplayRadius(member, selected, hoveredId) {
   let r = member.radius;
   if (isGalaxyThemeFocus() && member.theme === state.theme) {
     const richness = Math.min(1, (member.descLength || 0) / 520 + (member.spaceCount || 0) / 10);
-    r *= Math.exp(0.68 + richness * 1.12);
+    r *= Math.exp(0.38 + richness * 0.72);
   }
-  if (highlighted) r += 10;
-  return Math.min(r, 80);
+  if (highlighted) r += 6;
+  return Math.min(r, GALAXY_MEMBER_R_CAP);
 }
 
 function truncateGalaxyLabel(name, max = 20) {
@@ -1839,16 +1851,17 @@ function updateSummary(list) {
 }
 
 function anchorMap(list, width, height) {
-  const themes = [...new Set(list.map((member) => member.theme))];
+  const themes = [...new Set(list.map((member) => member.theme))].sort((a, b) => a.localeCompare(b));
   if (themes.length === 1) {
     const theme = themes[0];
     return new Map([[theme, { x: width / 2, y: height / 2 }]]);
   }
-  const radiusX = width * 0.41;
-  const radiusY = height * 0.37;
+  const span = Math.min(width, height);
+  const radiusX = span * 0.36;
+  const radiusY = span * 0.31;
   return new Map(
     themes.map((theme, index) => {
-      const angle = state.phase + (index / Math.max(themes.length, 1)) * Math.PI * 2;
+      const angle = (index / Math.max(themes.length, 1)) * Math.PI * 2 + Math.PI / 2;
       return [
         theme,
         {
@@ -1899,15 +1912,14 @@ function snapSingleThemeVogelPositions(list) {
   const { width, height } = readCanvasCssSize();
   const anchors = anchorMap(list, width, height);
   if (anchors.size !== 1) return;
-  const diskHalfW = Math.max(64, width * 0.5 - 40);
-  const diskHalfH = Math.max(64, height * 0.5 - 76);
+  const { diskHalfW, diskHalfH } = galaxySingleDiskHalfExtents(width, height);
   const anchor = [...anchors.values()][0];
   const n = Math.max(list.length, 1);
   list.forEach((member, index) => {
     const idx = index + 1;
     const golden = idx * 2.39996322972865332;
-    const normR = Math.sqrt(idx / (n + 1));
-    const spin = state.phase * 0.1;
+    const normR = Math.sqrt(idx / (n + 1.12));
+    const spin = state.phase * 0.06;
     const t = golden + spin;
     member.x = anchor.x + Math.cos(t) * normR * diskHalfW;
     member.y = anchor.y + Math.sin(t) * normR * diskHalfH;
@@ -1921,16 +1933,16 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
   const anchors = anchorMap(list, width, height);
   const singleThemeDisk = anchors.size === 1;
   const orbitScale = galaxyOrbitScale();
-  const diskHalfW = singleThemeDisk ? Math.max(64, width * 0.5 - 40) : 0;
-  const diskHalfH = singleThemeDisk ? Math.max(64, height * 0.5 - 76) : 0;
-  const layoutPull = 0.012;
-  const layoutDamp = 0.92;
-  const angleDrift = now * 0.00008;
+  const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
+  const { diskHalfW, diskHalfH } = diskExtents;
+  const layoutPull = 0.016;
+  const layoutDamp = 0.9;
+  const angleDrift = now * 0.000035;
 
   list.forEach((member, index) => {
     if (freezeEntityId && member.entityId === freezeEntityId) return;
     const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
-    const angle = member.seed + index * 0.07 + angleDrift;
+    const angle = member.seed + index * 0.065 + angleDrift;
     let targetX;
     let targetY;
 
@@ -1938,18 +1950,18 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
       const n = Math.max(list.length, 1);
       const idx = index + 1;
       const golden = idx * 2.39996322972865332;
-      const normR = Math.sqrt(idx / (n + 1));
-      const wobbleX = Math.sin(now * 0.00028 + member.seed * 3.9) * 4;
-      const wobbleY = Math.cos(now * 0.00026 + member.seed * 2.7) * 4;
-      const spin = state.phase * 0.1;
-      const t = golden + spin + angleDrift;
+      const normR = Math.sqrt(idx / (n + 1.12));
+      const wobbleX = Math.sin(now * 0.00022 + member.seed * 3.9) * 2.2;
+      const wobbleY = Math.cos(now * 0.0002 + member.seed * 2.7) * 2.2;
+      const spin = state.phase * 0.06;
+      const t = golden + spin;
       targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
       targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
     } else {
-      const viewScale = Math.min(1.85, Math.min(width, height) / 520);
-      const orbit = (42 + (index % 12) * 16 + member.spaceCount * 8) * orbitScale * viewScale;
+      const viewScale = Math.min(1.72, Math.min(width, height) / 500);
+      const orbit = (50 + (index % 12) * 20 + member.spaceCount * 9) * orbitScale * viewScale;
       targetX = anchor.x + Math.cos(angle) * orbit;
-      targetY = anchor.y + Math.sin(angle * 1.2) * (orbit * 0.72);
+      targetY = anchor.y + Math.sin(angle * 1.15) * (orbit * 0.74);
     }
 
     const curX = Number.isFinite(member.x) ? member.x : targetX;
@@ -2002,23 +2014,22 @@ function drawFrame() {
 
   ctx.clearRect(0, 0, width, height);
 
-  const backgroundGlow = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height * 0.52);
-  backgroundGlow.addColorStop(0, "rgba(182, 128, 255, 0.08)");
+  const backgroundGlow = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height * 0.48);
+  backgroundGlow.addColorStop(0, "rgba(182, 128, 255, 0.055)");
   backgroundGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
   ctx.fillStyle = backgroundGlow;
   ctx.fillRect(0, 0, width, height);
 
   ctx.save();
   const singleThemeDisk = anchors.size === 1;
-  const orbitScale = galaxyOrbitScale();
-  const diskHalfW = singleThemeDisk ? Math.max(64, width * 0.5 - 40) : 0;
-  const diskHalfH = singleThemeDisk ? Math.max(64, height * 0.5 - 76) : 0;
-
+  const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
+  const { diskHalfW, diskHalfH } = diskExtents;
+  const span = Math.min(width, height);
   const ringRadius = singleThemeDisk
     ? Math.max(diskHalfW, diskHalfH)
     : isGalaxyThemeFocus()
-      ? 118
-      : 90;
+      ? span * 0.124
+      : span * 0.096;
   anchors.forEach((anchor, theme) => {
     const color = palette[theme] || "#94A3B8";
     ctx.beginPath();
@@ -2052,7 +2063,7 @@ function drawFrame() {
 
     ctx.beginPath();
     ctx.fillStyle = `${member.color}${highlighted ? "" : isGalaxyThemeFocus() ? "e6" : "cc"}`;
-    ctx.shadowBlur = highlighted ? 48 : isGalaxyThemeFocus() ? 36 : 28;
+    ctx.shadowBlur = highlighted ? 30 : isGalaxyThemeFocus() ? 24 : 18;
     ctx.shadowColor = member.color;
     ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
     ctx.fill();
