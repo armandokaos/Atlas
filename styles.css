@@ -73,9 +73,14 @@ body::after {
 .hero,
 .controls-panel,
 .visual-grid,
-.roster-card {
+.roster-card,
+.marks-sync-section {
   position: relative;
   z-index: 1;
+}
+
+.marks-sync-section {
+  margin-top: 28px;
 }
 
 .hero {
