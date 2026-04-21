@@ -1536,19 +1536,25 @@ function relativeDensity(member) {
   return "light profile";
 }
 
-function activeMembers() {
+/** Theme + team + search (used for skill-pill counts so they never drop to 0 just because a skill filter is active). */
+function memberMatchesGalaxyRollupFilters(member) {
   const query = state.query.trim().toLowerCase();
+  const matchTheme = state.theme === "all" || member.theme === state.theme;
+  const matchOrg = state.orgGroup === "all" || member.orgGroup === state.orgGroup;
+  const skillsHay = memberSkillsList(member).join(" ");
+  const haystack = `${member.name} ${member.description} ${member.theme} ${member.orgGroupLabel} ${skillsHay}`.toLowerCase();
+  const matchQuery = !query || haystack.includes(query);
+  return matchTheme && matchOrg && matchQuery;
+}
+
+function activeMembers() {
   return members.filter((member) => {
-    const matchTheme = state.theme === "all" || member.theme === state.theme;
-    const matchOrg = state.orgGroup === "all" || member.orgGroup === state.orgGroup;
+    if (!memberMatchesGalaxyRollupFilters(member)) return false;
     const matchSkillGalaxy =
       state.galaxyViewMode !== "skills" ||
       state.skillGalaxy === "all" ||
       member.skillClusterKey === state.skillGalaxy;
-    const skillsHay = memberSkillsList(member).join(" ");
-    const haystack = `${member.name} ${member.description} ${member.theme} ${member.orgGroupLabel} ${skillsHay}`.toLowerCase();
-    const matchQuery = !query || haystack.includes(query);
-    return matchTheme && matchOrg && matchSkillGalaxy && matchQuery;
+    return matchSkillGalaxy;
   });
 }
 
@@ -1732,11 +1738,13 @@ function renderGalaxySkillPillsStrip() {
   if (!bar || !el) return;
   if (state.galaxyViewMode !== "skills") {
     bar.hidden = true;
+    el.innerHTML = "";
     return;
   }
   bar.hidden = false;
+  const rollup = members.filter(memberMatchesGalaxyRollupFilters);
   const counts = new Map();
-  members.forEach((m) => {
+  rollup.forEach((m) => {
     const k = m.skillClusterKey;
     counts.set(k, (counts.get(k) || 0) + 1);
   });
@@ -1751,17 +1759,19 @@ function renderGalaxySkillPillsStrip() {
   const keysWithPeople = GALAXY_TOP_SKILL_KEYS.filter((k) => (counts.get(k) || 0) >= 2);
   const keys = ["all", ...keysWithPeople];
   if ((counts.get(GALAXY_SKILL_OTHER) || 0) > 0) keys.push(GALAXY_SKILL_OTHER);
-  const pills = keys.map((key) => {
-    if (key === "all") {
-      return { key: "all", label: "All skills", color: "#EEF4FF", count: members.length };
-    }
-    return {
-      key,
-      label: truncateGalaxyLabel(GALAXY_SKILL_LABEL_BY_KEY.get(key) || key, 20),
-      color: galaxySkillHex(key),
-      count: counts.get(key) || 0,
-    };
-  });
+  const pills = keys
+    .map((key) => {
+      if (key === "all") {
+        return { key: "all", label: "All skills", color: "#EEF4FF", count: rollup.length };
+      }
+      return {
+        key,
+        label: truncateGalaxyLabel(GALAXY_SKILL_LABEL_BY_KEY.get(key) || key, 20),
+        color: galaxySkillHex(key),
+        count: counts.get(key) || 0,
+      };
+    })
+    .filter((pill) => pill.key === "all" || pill.count > 0);
   el.innerHTML = pills
     .map((pill) => {
       const enc = pill.key === "all" ? "all" : encodeURIComponent(pill.key);

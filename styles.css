@@ -544,6 +544,11 @@ h1 {
   padding-right: 4px;
 }
 
+/* `display: flex` above wins over the UA `[hidden]` rule — force hide when not in Skills mode */
+.galaxy-skill-toolbar[hidden] {
+  display: none !important;
+}
+
 .galaxy-skill-toolbar-label {
   font-size: 0.72rem;
   font-weight: 700;
