@@ -1518,6 +1518,8 @@ const detailCard = document.querySelector(".detail-card");
 const selectionSummary = document.querySelector("#selection-summary");
 const rosterCard = document.querySelector(".roster-card");
 const galaxyCardEl = document.querySelector(".galaxy-card");
+const galaxyThemePills = document.querySelector("#galaxy-theme-pills");
+const galaxyOrgPills = document.querySelector("#galaxy-org-pills");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -1732,6 +1734,26 @@ function buildOrgGroupPills() {
   renderOrgGroupPillsInto(spotlightOrgStrip, true);
 }
 
+/** Category / Team pill rows under the constellation tabs (same filters as Spotlight). */
+function renderGalaxyCategoryTeamToolbars() {
+  const catBar = document.querySelector("#galaxy-category-toolbar");
+  const teamBar = document.querySelector("#galaxy-team-toolbar");
+  if (!catBar || !teamBar || !galaxyThemePills || !galaxyOrgPills) return;
+  const mode = state.galaxyViewMode;
+  catBar.hidden = mode !== "category";
+  teamBar.hidden = mode !== "team";
+  if (mode === "category") {
+    renderThemePillsInto(galaxyThemePills, true);
+  } else {
+    galaxyThemePills.innerHTML = "";
+  }
+  if (mode === "team") {
+    renderOrgGroupPillsInto(galaxyOrgPills, true);
+  } else {
+    galaxyOrgPills.innerHTML = "";
+  }
+}
+
 function renderGalaxySkillPillsStrip() {
   const bar = document.querySelector("#galaxy-skill-toolbar");
   const el = document.querySelector("#galaxy-skill-pills");
@@ -1809,6 +1831,7 @@ function renderGalaxyViewChrome() {
         >${m.label}</button>`,
     )
     .join("");
+  renderGalaxyCategoryTeamToolbars();
   renderGalaxySkillPillsStrip();
 }
 
@@ -2488,9 +2511,11 @@ themePills.addEventListener("click", onThemePillClick);
 if (spotlightThemeStrip) {
   spotlightThemeStrip.addEventListener("click", onThemePillClick);
 }
+if (galaxyThemePills) galaxyThemePills.addEventListener("click", onThemePillClick);
 
 if (orgGroupPills) orgGroupPills.addEventListener("click", onOrgGroupPillClick);
 if (spotlightOrgStrip) spotlightOrgStrip.addEventListener("click", onOrgGroupPillClick);
+if (galaxyOrgPills) galaxyOrgPills.addEventListener("click", onOrgGroupPillClick);
 
 if (galaxyCardEl) {
   galaxyCardEl.addEventListener("click", (event) => {

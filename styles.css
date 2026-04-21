@@ -533,7 +533,7 @@ h1 {
   box-shadow: 0 6px 18px rgba(116, 71, 245, 0.12);
 }
 
-.galaxy-skill-toolbar {
+.galaxy-mode-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -544,12 +544,12 @@ h1 {
   padding-right: 4px;
 }
 
-/* `display: flex` above wins over the UA `[hidden]` rule — force hide when not in Skills mode */
-.galaxy-skill-toolbar[hidden] {
+/* `display: flex` wins over the UA `[hidden]` rule — force hide when a mode toolbar is inactive */
+.galaxy-mode-toolbar[hidden] {
   display: none !important;
 }
 
-.galaxy-skill-toolbar-label {
+.galaxy-mode-toolbar-label {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
