@@ -503,13 +503,13 @@ function gfDrawBackButton(ctx) {
   ctx.restore();
 }
 
-function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now) {
+function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now, grpOx = 0, grpOy = 0) {
   if (linksAlpha <= 0.02) return;
   const hubEdge = hubR + 1.5;
   nodes.forEach((node, index) => {
     const { ox, oy } = gfSkillNodeFloat(node, index, now);
-    const tx = node.tx + ox;
-    const ty = node.ty + oy;
+    const tx = node.tx + ox + grpOx;
+    const ty = node.ty + oy + grpOy;
     const dx = tx - hx;
     const dy = ty - hy;
     const dist = Math.hypot(dx, dy) || 1;
@@ -546,7 +546,7 @@ function gfDrawSkillLinks(ctx, hx, hy, hubR, nodes, linksAlpha, dashPhase, now) 
   ctx.lineDashOffset = 0;
 }
 
-function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
+function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now, grpOx = 0, grpOy = 0) {
   nodes.forEach((node, index) => {
     const stagger = index * 0.04;
     const rawA = Math.max(0, Math.min(1, (skillsAlpha - stagger) / (1 - stagger + 0.001)));
@@ -554,8 +554,8 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now) {
     const a = gfEaseOutCubic(rawA);
     const pop = gfEaseOutCubic(Math.min(1, rawA * 1.15));
     const { ox, oy } = gfSkillNodeFloat(node, index, now);
-    const x = node.tx + ox;
-    const y = node.ty + oy;
+    const x = node.tx + ox + grpOx;
+    const y = node.ty + oy + grpOy;
     const nr = node.isMore ? 5 : 5 + Math.min(7, String(node.name).length * 0.36);
     const rDraw = nr * (0.2 + 0.8 * pop);
     ctx.save();
@@ -666,10 +666,14 @@ function gfCurrentHubGeometry(now, width, height) {
   const cx = width / 2;
   const cy = height / 2;
   if (galaxyFocus.mode === "person") {
-    const t = now * 0.00052;
-    const rBreath = Math.sin(t) * 0.042 + Math.sin(t * 0.58 + 1.3) * 0.018;
+    const t = now * 0.0004;
+    const driftX = Math.sin(t) * 7 + Math.cos(t * 0.63 + 0.5) * 3.5;
+    const driftY = Math.cos(t * 0.51) * 6 + Math.sin(t * 0.72 + 1.2) * 3;
+    const hx = cx + driftX;
+    const hy = cy + driftY;
+    const rBreath = Math.sin(t * 1.08) * 0.065 + Math.sin(t * 0.5 + 2) * 0.028;
     const hubR = galaxyFocus.hubTargetR * (1 + rBreath);
-    return { hx: cx, hy: cy, hubR, hubGrowT: 1 };
+    return { hx, hy, hubR, hubGrowT: 1 };
   }
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
@@ -704,12 +708,16 @@ function gfGalaxyPointerTargets(x, y, now, width, height) {
   if (gfHitBackButton(x, y)) return "back";
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR } = geo;
+  const cx0 = width / 2;
+  const cy0 = height / 2;
+  const grpOx = galaxyFocus.mode === "person" ? hx - cx0 : 0;
+  const grpOy = galaxyFocus.mode === "person" ? hy - cy0 : 0;
   if (Math.hypot(x - hx, y - hy) <= hubR + 16) return "hub";
   for (let i = 0; i < galaxyFocus.skillNodes.length; i += 1) {
     const node = galaxyFocus.skillNodes[i];
     const { ox, oy } = gfSkillNodeFloat(node, i, now);
-    const nx = node.tx + ox;
-    const ny = node.ty + oy;
+    const nx = node.tx + ox + grpOx;
+    const ny = node.ty + oy + grpOy;
     const nr = node.isMore ? 5 : 5 + Math.min(7, String(node.name).length * 0.38);
     if (Math.hypot(x - nx, y - ny) <= nr + 12) return "skill";
   }
@@ -730,6 +738,10 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
   const spin = 0;
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR, hubGrowT } = geo;
+  const cx0 = width / 2;
+  const cy0 = height / 2;
+  const grpOx = galaxyFocus.mode === "person" ? hx - cx0 : 0;
+  const grpOy = galaxyFocus.mode === "person" ? hy - cy0 : 0;
 
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
@@ -751,8 +763,8 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.restore();
 
     gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now);
-    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now, 0, 0);
+    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now, 0, 0);
     gfDrawBackButton(ctx);
 
     if (p >= 1) {
@@ -773,8 +785,8 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     });
     ctx.restore();
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.022, now);
-    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.022, now, grpOx, grpOy);
+    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now, grpOx, grpOy);
     gfDrawBackButton(ctx);
     return;
   }
@@ -799,8 +811,8 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.restore();
 
     gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now);
-    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now);
+    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now, 0, 0);
+    gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now, 0, 0);
     gfDrawBackButton(ctx);
 
     if (p >= 1) gfFinishExitToLandscape();
