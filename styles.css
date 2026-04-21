@@ -539,6 +539,9 @@ h1 {
   align-items: center;
   gap: 10px 14px;
   margin: -4px 0 14px;
+  max-height: min(42vh, 320px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .galaxy-skill-toolbar-label {

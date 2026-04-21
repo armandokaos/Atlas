@@ -242,35 +242,27 @@ function normalizeMemberSkills(raw) {
 
 const GALAXY_SKILL_OTHER = "__galaxy_other__";
 
-/** How many distinct skill clusters the Skills galaxy mode shows (by global frequency). */
-const GALAXY_VIZ_SKILL_COUNT = 24;
-
-const GALAXY_SKILL_HEX = [
-  "#7c3aed",
-  "#2563eb",
-  "#059669",
-  "#d97706",
-  "#dc2626",
-  "#db2777",
-  "#0d9488",
-  "#4f46e5",
-  "#ca8a04",
-  "#16a34a",
-  "#9333ea",
-  "#0891b2",
-  "#ea580c",
-  "#0f766e",
-  "#be185d",
-  "#4d7c0f",
-  "#b45309",
-  "#1d4ed8",
-  "#a21caf",
-  "#0e7490",
-  "#c026d3",
-  "#65a30d",
-  "#e11d48",
-  "#0369a1",
-];
+/** Distinct hue per skill index (Skills galaxy); output is always `#rrggbb` for canvas alpha suffixes. */
+function galaxySkillHueToHex(index) {
+  const h = ((index * 43.7 + 277) % 360) / 360;
+  const s = 0.62;
+  const l = 0.48;
+  const hue2rgb = (p, q, t) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = Math.round(hue2rgb(p, q, h + 1 / 3) * 255);
+  const g = Math.round(hue2rgb(p, q, h) * 255);
+  const b = Math.round(hue2rgb(p, q, h - 1 / 3) * 255);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
 
 const membersSourceFiltered = data.members
   .filter((member) => member.description && member.description.trim())
@@ -289,9 +281,10 @@ const __galaxySkillFreq = (() => {
   return m;
 })();
 
+/** Every skill string seen ≥1 time on loaded profiles (Skills galaxy clusters), most frequent first. */
 const GALAXY_TOP_SKILL_KEYS = [...__galaxySkillFreq.entries()]
+  .filter(([, count]) => count >= 1)
   .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-  .slice(0, GALAXY_VIZ_SKILL_COUNT)
   .map(([k]) => k);
 
 const GALAXY_SKILL_LABEL_BY_KEY = new Map();
@@ -309,7 +302,7 @@ function galaxySkillHex(skillKey) {
   if (skillKey === GALAXY_SKILL_OTHER) return "#94a3b8";
   const i = GALAXY_TOP_SKILL_KEYS.indexOf(skillKey);
   if (i < 0) return "#94a3b8";
-  return GALAXY_SKILL_HEX[i % GALAXY_SKILL_HEX.length];
+  return galaxySkillHueToHex(i);
 }
 
 const members = membersSourceFiltered.map((member, index) => {
@@ -409,7 +402,7 @@ const state = {
   query: "",
   theme: "all",
   orgGroup: "all",
-  /** Galaxy layout: `category` (theme), `team` (org), `skills` (top N recurrent skills). */
+  /** Galaxy layout: `category` (theme), `team` (org), `skills` (every skill seen ≥1× on loaded profiles). */
   galaxyViewMode: "category",
   /** When `galaxyViewMode === "skills"`, which skill cluster is emphasized (matches `skillClusterKey`). */
   skillGalaxy: "all",
