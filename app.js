@@ -53,6 +53,7 @@ const ORG_GROUP_RAW_SPECS = [
   { key: "curators-green", label: "Curators green", names: [] },
   { key: "curators-red", label: "Curators Red", names: [] },
   { key: "curators-yellow", label: "Curators yellow", names: [] },
+  { key: "curators-orange", label: "Curators orange", names: [] },
 ];
 
 const ORG_GROUP_SPECS = ORG_GROUP_RAW_SPECS.map((row) => ({
@@ -75,6 +76,7 @@ const ORG_GROUP_PILL_ORDER = [
   "curators-green",
   "curators-red",
   "curators-yellow",
+  "curators-orange",
   "curators",
 ];
 
@@ -86,6 +88,7 @@ const ORG_GROUP_DOT_COLORS = {
   "curators-green": "#16a34a",
   "curators-red": "#dc2626",
   "curators-yellow": "#ca8a04",
+  "curators-orange": "#ea580c",
   curators: "#64748b",
 };
 
@@ -94,6 +97,7 @@ const BADGE_TO_ORG_GROUP = {
   red: "curators-red",
   yellow: "curators-yellow",
   pink: "curators-elite",
+  orange: "curators-orange",
 };
 
 function resolveOrgGroupKey(displayName) {
