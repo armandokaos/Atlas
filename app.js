@@ -240,35 +240,102 @@ function normalizeMemberSkills(raw) {
   return [];
 }
 
-const members = data.members
+const GALAXY_SKILL_OTHER = "__galaxy_other__";
+
+const GALAXY_SKILL_HEX = [
+  "#7c3aed",
+  "#2563eb",
+  "#059669",
+  "#d97706",
+  "#dc2626",
+  "#db2777",
+  "#0d9488",
+  "#4f46e5",
+  "#ca8a04",
+  "#16a34a",
+  "#9333ea",
+  "#0891b2",
+];
+
+const membersSourceFiltered = data.members
   .filter((member) => member.description && member.description.trim())
-  .filter((member) => member.avatarUrl && member.avatarUrl.trim())
-  .map((member, index) => {
-    const spaces = (member.spaces || []).map(normalizeSpaceUrl).filter(Boolean);
-    const spaceCount = spaces.length;
-    const orgGroup = resolveOrgGroupKey(member.name);
-    return {
-      isBoss: member.name === BOSS_NAME,
-      ...member,
-      spaces,
-      spaceCount,
-      orgGroup,
-      orgGroupLabel: ORG_GROUP_LABEL_BY_KEY[orgGroup] || "Curators",
-      skills: normalizeMemberSkills(member.skills),
-      socialLinks: {
-        x: normalizeXUrl(member.socialLinks?.x || ""),
-        github: normalizeGithubUrl(member.socialLinks?.github || ""),
-        linkedin: normalizeLinkedinUrl(member.socialLinks?.linkedin || ""),
-      },
-      color: member.name === BOSS_NAME ? BOSS_COLOR : palette[member.theme] || member.color || "#94A3B8",
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      radius: 7 + Math.min(19, spaceCount * 1.42 + member.descLength / 58),
-      seed: index * 0.37,
-    };
+  .filter((member) => member.avatarUrl && member.avatarUrl.trim());
+
+const __galaxySkillFreq = (() => {
+  const m = new Map();
+  for (const mem of membersSourceFiltered) {
+    for (const raw of normalizeMemberSkills(mem.skills)) {
+      const t = String(raw).trim();
+      if (!t) continue;
+      const k = t.toLowerCase();
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+  }
+  return m;
+})();
+
+const GALAXY_TOP_SKILL_KEYS = [...__galaxySkillFreq.entries()]
+  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  .slice(0, 12)
+  .map(([k]) => k);
+
+const GALAXY_SKILL_LABEL_BY_KEY = new Map();
+GALAXY_SKILL_LABEL_BY_KEY.set(GALAXY_SKILL_OTHER, "Other skills");
+membersSourceFiltered.forEach((mem) => {
+  normalizeMemberSkills(mem.skills).forEach((raw) => {
+    const t = String(raw).trim();
+    if (!t) return;
+    const k = t.toLowerCase();
+    if (!GALAXY_SKILL_LABEL_BY_KEY.has(k)) GALAXY_SKILL_LABEL_BY_KEY.set(k, t);
   });
+});
+
+function galaxySkillHex(skillKey) {
+  if (skillKey === GALAXY_SKILL_OTHER) return "#94a3b8";
+  const i = GALAXY_TOP_SKILL_KEYS.indexOf(skillKey);
+  if (i < 0) return "#94a3b8";
+  return GALAXY_SKILL_HEX[i % GALAXY_SKILL_HEX.length];
+}
+
+const members = membersSourceFiltered.map((member, index) => {
+  const spaces = (member.spaces || []).map(normalizeSpaceUrl).filter(Boolean);
+  const spaceCount = spaces.length;
+  const orgGroup = resolveOrgGroupKey(member.name);
+  const skills = normalizeMemberSkills(member.skills);
+  let skillClusterKey = GALAXY_SKILL_OTHER;
+  if (GALAXY_TOP_SKILL_KEYS.length) {
+    for (const s of skills) {
+      const k = String(s).trim().toLowerCase();
+      if (GALAXY_TOP_SKILL_KEYS.includes(k)) {
+        skillClusterKey = k;
+        break;
+      }
+    }
+  }
+  return {
+    isBoss: member.name === BOSS_NAME,
+    ...member,
+    spaces,
+    spaceCount,
+    orgGroup,
+    orgGroupLabel: ORG_GROUP_LABEL_BY_KEY[orgGroup] || "Curators",
+    skills,
+    skillClusterKey,
+    skillClusterLabel: GALAXY_SKILL_LABEL_BY_KEY.get(skillClusterKey) || "Other skills",
+    socialLinks: {
+      x: normalizeXUrl(member.socialLinks?.x || ""),
+      github: normalizeGithubUrl(member.socialLinks?.github || ""),
+      linkedin: normalizeLinkedinUrl(member.socialLinks?.linkedin || ""),
+    },
+    color: member.name === BOSS_NAME ? BOSS_COLOR : palette[member.theme] || member.color || "#94A3B8",
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    radius: 7 + Math.min(19, spaceCount * 1.42 + member.descLength / 58),
+    seed: index * 0.37,
+  };
+});
 
 ORG_GROUP_RAW_SPECS.forEach((spec) => {
   if (!spec.names.length) return;
@@ -327,6 +394,10 @@ const state = {
   query: "",
   theme: "all",
   orgGroup: "all",
+  /** Galaxy layout: `category` (theme), `team` (org), `skills` (top 12 skills). */
+  galaxyViewMode: "category",
+  /** When `galaxyViewMode === "skills"`, which skill cluster is emphasized (matches `skillClusterKey`). */
+  skillGalaxy: "all",
   rosterFilter: "all",
   rosterPage: 1,
   starFilter: "all",
@@ -335,6 +406,75 @@ const state = {
   selectedId: demoMember?.entityId || null,
   phase: 0,
 };
+
+function getGalaxyClusterKey(member) {
+  if (state.galaxyViewMode === "team") return member.orgGroup;
+  if (state.galaxyViewMode === "skills") return member.skillClusterKey;
+  return member.theme;
+}
+
+function sortedGalaxyClusterKeys(keys) {
+  const uniq = [...new Set(keys)];
+  if (state.galaxyViewMode === "skills") {
+    const out = [];
+    GALAXY_TOP_SKILL_KEYS.forEach((k) => {
+      if (uniq.includes(k)) out.push(k);
+    });
+    if (uniq.includes(GALAXY_SKILL_OTHER)) out.push(GALAXY_SKILL_OTHER);
+    uniq.forEach((k) => {
+      if (!out.includes(k)) out.push(k);
+    });
+    return out;
+  }
+  if (state.galaxyViewMode === "team") {
+    return [...uniq].sort((a, b) => {
+      const ia = ORG_GROUP_PILL_ORDER.indexOf(a);
+      const ib = ORG_GROUP_PILL_ORDER.indexOf(b);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+  }
+  return [...uniq].sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function getGalaxyClusterColor(key) {
+  if (state.galaxyViewMode === "category") return palette[key] || "#94A3B8";
+  if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[key] || "#94A3B8";
+  return galaxySkillHex(key);
+}
+
+function getGalaxyClusterLabel(key) {
+  if (state.galaxyViewMode === "category") return String(key);
+  if (state.galaxyViewMode === "team") return ORG_GROUP_LABEL_BY_KEY[key] || String(key);
+  return GALAXY_SKILL_LABEL_BY_KEY.get(key) || String(key);
+}
+
+function isGalaxyClusterFocus() {
+  if (state.galaxyViewMode === "category") return state.theme !== "all";
+  if (state.galaxyViewMode === "team") return state.orgGroup !== "all";
+  return state.skillGalaxy !== "all";
+}
+
+function memberIsGalaxyClusterFocused(member) {
+  if (!isGalaxyClusterFocus()) return false;
+  if (state.galaxyViewMode === "category") return member.theme === state.theme;
+  if (state.galaxyViewMode === "team") return member.orgGroup === state.orgGroup;
+  return member.skillClusterKey === state.skillGalaxy;
+}
+
+function galaxyMemberBaseColor(member) {
+  if (member.isBoss) return BOSS_COLOR;
+  if (state.galaxyViewMode === "skills") return galaxySkillHex(member.skillClusterKey);
+  if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[member.orgGroup] || "#94A3B8";
+  return member.color;
+}
+
+function galaxyMemberFillColor(member, highlighted) {
+  const base = galaxyMemberBaseColor(member);
+  if (highlighted || memberIsGalaxyClusterFocused(member)) return base;
+  const alpha = isGalaxyClusterFocus() ? "e6" : "cc";
+  if (String(base).startsWith("#")) return `${base}${alpha}`;
+  return base;
+}
 
 /** Immersive person → skills constellation (canvas-only). See plan: focus_personne_canvas */
 const GALAXY_FOCUS_MAX_SKILLS = 12;
@@ -1337,7 +1477,12 @@ async function initCloudAuth() {
   renderMarksSyncPanel();
 }
 
-const __galaxyThemeForReset = { theme: state.theme, orgGroup: state.orgGroup };
+const __galaxyLayoutReset = {
+  theme: state.theme,
+  orgGroup: state.orgGroup,
+  galaxyViewMode: state.galaxyViewMode,
+  skillGalaxy: state.skillGalaxy,
+};
 
 const canvas = document.querySelector("#galaxy-canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
@@ -1359,6 +1504,7 @@ const detailPanel = document.querySelector("#detail-panel");
 const detailCard = document.querySelector(".detail-card");
 const selectionSummary = document.querySelector("#selection-summary");
 const rosterCard = document.querySelector(".roster-card");
+const galaxyCardEl = document.querySelector(".galaxy-card");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -1382,10 +1528,14 @@ function activeMembers() {
   return members.filter((member) => {
     const matchTheme = state.theme === "all" || member.theme === state.theme;
     const matchOrg = state.orgGroup === "all" || member.orgGroup === state.orgGroup;
+    const matchSkillGalaxy =
+      state.galaxyViewMode !== "skills" ||
+      state.skillGalaxy === "all" ||
+      member.skillClusterKey === state.skillGalaxy;
     const skillsHay = memberSkillsList(member).join(" ");
     const haystack = `${member.name} ${member.description} ${member.theme} ${member.orgGroupLabel} ${skillsHay}`.toLowerCase();
     const matchQuery = !query || haystack.includes(query);
-    return matchTheme && matchOrg && matchQuery;
+    return matchTheme && matchOrg && matchSkillGalaxy && matchQuery;
   });
 }
 
@@ -1563,10 +1713,77 @@ function buildOrgGroupPills() {
   renderOrgGroupPillsInto(spotlightOrgStrip, true);
 }
 
+function renderGalaxySkillPillsStrip() {
+  const bar = document.querySelector("#galaxy-skill-toolbar");
+  const el = document.querySelector("#galaxy-skill-pills");
+  if (!bar || !el) return;
+  if (state.galaxyViewMode !== "skills") {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  const keys = ["all", ...GALAXY_TOP_SKILL_KEYS, GALAXY_SKILL_OTHER];
+  const counts = new Map();
+  members.forEach((m) => {
+    const k = m.skillClusterKey;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  });
+  const pills = keys.map((key) => {
+    if (key === "all") {
+      return { key: "all", label: "All skills", color: "#EEF4FF", count: members.length };
+    }
+    return {
+      key,
+      label: truncateGalaxyLabel(GALAXY_SKILL_LABEL_BY_KEY.get(key) || key, 20),
+      color: galaxySkillHex(key),
+      count: counts.get(key) || 0,
+    };
+  });
+  el.innerHTML = pills
+    .map((pill) => {
+      const enc = pill.key === "all" ? "all" : encodeURIComponent(pill.key);
+      return `
+        <button
+          type="button"
+          class="theme-pill theme-pill--compact ${state.skillGalaxy === pill.key ? "active" : ""}"
+          data-skill-galaxy="${enc}"
+        >
+          <span class="theme-dot" style="color:${pill.color}; background:${pill.color};"></span>
+          <span>${pill.label}</span>
+          <span class="theme-pill-count">${formatNumber(pill.count)}</span>
+        </button>`;
+    })
+    .join("");
+}
+
+function renderGalaxyViewChrome() {
+  const root = document.querySelector("#galaxy-viz-switch");
+  if (!root) return;
+  const modes = [
+    { id: "category", label: "Category" },
+    { id: "team", label: "Team" },
+    { id: "skills", label: "Skills" },
+  ];
+  root.innerHTML = modes
+    .map(
+      (m) => `
+        <button
+          type="button"
+          class="galaxy-viz-tab ${state.galaxyViewMode === m.id ? "is-active" : ""}"
+          data-galaxy-view="${m.id}"
+          role="tab"
+          aria-selected="${state.galaxyViewMode === m.id ? "true" : "false"}"
+        >${m.label}</button>`,
+    )
+    .join("");
+  renderGalaxySkillPillsStrip();
+}
+
 function buildThemePills() {
   renderThemePillsInto(themePills, false);
   renderThemePillsInto(spotlightThemeStrip, true);
   buildOrgGroupPills();
+  renderGalaxyViewChrome();
 }
 
 function renderStarRow(entityId, compact) {
@@ -1779,10 +1996,6 @@ function renderRoster(list) {
   `;
 }
 
-function isGalaxyThemeFocus() {
-  return state.theme !== "all";
-}
-
 /** Plafond rayon pastille constellation — garder aligné avec les marges disque Vogel. */
 const GALAXY_MEMBER_R_CAP = 52;
 
@@ -1796,7 +2009,7 @@ function galaxySingleDiskHalfExtents(width, height) {
 }
 
 function galaxyOrbitScale() {
-  return isGalaxyThemeFocus() ? 1.92 : 1;
+  return isGalaxyClusterFocus() ? 1.92 : 1;
 }
 
 function memberIsGalaxyHighlighted(member, selected, hoveredId) {
@@ -1810,7 +2023,7 @@ function memberIsGalaxyHighlighted(member, selected, hoveredId) {
 function memberDisplayRadius(member, selected, hoveredId) {
   const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
   let r = member.radius;
-  if (isGalaxyThemeFocus() && member.theme === state.theme) {
+  if (isGalaxyClusterFocus() && memberIsGalaxyClusterFocused(member)) {
     const richness = Math.min(1, (member.descLength || 0) / 520 + (member.spaceCount || 0) / 10);
     r *= Math.exp(0.38 + richness * 0.72);
   }
@@ -1838,6 +2051,7 @@ function updateSummary(list) {
     count === members.length &&
     state.theme === "all" &&
     state.orgGroup === "all" &&
+    state.skillGalaxy === "all" &&
     !state.query;
   if (defaultBlurb) {
     selectionSummary.textContent = `${formatNumber(count)} profiles with bios, grouped by shared themes.`;
@@ -1851,19 +2065,19 @@ function updateSummary(list) {
 }
 
 function anchorMap(list, width, height) {
-  const themes = [...new Set(list.map((member) => member.theme))].sort((a, b) => a.localeCompare(b));
-  if (themes.length === 1) {
-    const theme = themes[0];
-    return new Map([[theme, { x: width / 2, y: height / 2 }]]);
+  const keys = sortedGalaxyClusterKeys(list.map((m) => getGalaxyClusterKey(m)));
+  if (keys.length === 1) {
+    const k = keys[0];
+    return new Map([[k, { x: width / 2, y: height / 2 }]]);
   }
   const span = Math.min(width, height);
   const radiusX = span * 0.36;
   const radiusY = span * 0.31;
   return new Map(
-    themes.map((theme, index) => {
-      const angle = (index / Math.max(themes.length, 1)) * Math.PI * 2 + Math.PI / 2;
+    keys.map((clusterKey, index) => {
+      const angle = (index / Math.max(keys.length, 1)) * Math.PI * 2 + Math.PI / 2;
       return [
-        theme,
+        clusterKey,
         {
           x: width / 2 + Math.cos(angle) * radiusX,
           y: height / 2 + Math.sin(angle) * radiusY,
@@ -1941,7 +2155,7 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
 
   list.forEach((member, index) => {
     if (freezeEntityId && member.entityId === freezeEntityId) return;
-    const anchor = anchors.get(member.theme) || { x: width / 2, y: height / 2 };
+    const anchor = anchors.get(getGalaxyClusterKey(member)) || { x: width / 2, y: height / 2 };
     const angle = member.seed + index * 0.065 + angleDrift;
     let targetX;
     let targetY;
@@ -2027,14 +2241,14 @@ function drawFrame() {
   const span = Math.min(width, height);
   const ringRadius = singleThemeDisk
     ? Math.max(diskHalfW, diskHalfH)
-    : isGalaxyThemeFocus()
+    : isGalaxyClusterFocus()
       ? span * 0.124
       : span * 0.096;
-  anchors.forEach((anchor, theme) => {
-    const color = palette[theme] || "#94A3B8";
+  anchors.forEach((anchor, clusterKey) => {
+    const color = getGalaxyClusterColor(clusterKey);
     ctx.beginPath();
-    ctx.strokeStyle = `${color}25`;
-    ctx.lineWidth = isGalaxyThemeFocus() ? 1.25 : 1;
+    ctx.strokeStyle = `${color}33`;
+    ctx.lineWidth = isGalaxyClusterFocus() ? 1.25 : 1;
     if (singleThemeDisk && typeof ctx.ellipse === "function") {
       ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
     } else {
@@ -2043,10 +2257,10 @@ function drawFrame() {
     ctx.stroke();
 
     ctx.fillStyle = "#796f99";
-    ctx.font = isGalaxyThemeFocus()
+    ctx.font = isGalaxyClusterFocus()
       ? '600 13px system-ui, "Avenir Next", "Segoe UI", sans-serif'
       : '500 12px system-ui, "Avenir Next", "Segoe UI", sans-serif';
-    const label = String(theme);
+    const label = truncateGalaxyLabel(getGalaxyClusterLabel(clusterKey), 34);
     const tw = ctx.measureText(label).width;
     const labelY = singleThemeDisk
       ? Math.max(14, anchor.y - diskHalfH + 16)
@@ -2062,9 +2276,9 @@ function drawFrame() {
     const radius = memberDisplayRadius(member, selected, hoveredId);
 
     ctx.beginPath();
-    ctx.fillStyle = `${member.color}${highlighted ? "" : isGalaxyThemeFocus() ? "e6" : "cc"}`;
-    ctx.shadowBlur = highlighted ? 30 : isGalaxyThemeFocus() ? 24 : 18;
-    ctx.shadowColor = member.color;
+    ctx.fillStyle = galaxyMemberFillColor(member, highlighted);
+    ctx.shadowBlur = highlighted ? 30 : isGalaxyClusterFocus() ? 24 : 18;
+    ctx.shadowColor = galaxyMemberBaseColor(member);
     ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -2082,14 +2296,14 @@ function drawFrame() {
 
     if (highlighted) {
       ctx.beginPath();
-      ctx.strokeStyle = `${member.color}77`;
+      ctx.strokeStyle = `${galaxyMemberBaseColor(member)}77`;
       ctx.lineWidth = 2;
       ctx.arc(member.x, member.y, radius + Math.min(20, radius * 0.38), 0, Math.PI * 2);
       ctx.stroke();
     }
   });
 
-  if (isGalaxyThemeFocus()) {
+  if (isGalaxyClusterFocus()) {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -2169,9 +2383,16 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 
 function syncUI() {
   if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
-  if (__galaxyThemeForReset.theme !== state.theme || __galaxyThemeForReset.orgGroup !== state.orgGroup) {
-    __galaxyThemeForReset.theme = state.theme;
-    __galaxyThemeForReset.orgGroup = state.orgGroup;
+  if (
+    __galaxyLayoutReset.theme !== state.theme ||
+    __galaxyLayoutReset.orgGroup !== state.orgGroup ||
+    __galaxyLayoutReset.galaxyViewMode !== state.galaxyViewMode ||
+    __galaxyLayoutReset.skillGalaxy !== state.skillGalaxy
+  ) {
+    __galaxyLayoutReset.theme = state.theme;
+    __galaxyLayoutReset.orgGroup = state.orgGroup;
+    __galaxyLayoutReset.galaxyViewMode = state.galaxyViewMode;
+    __galaxyLayoutReset.skillGalaxy = state.skillGalaxy;
     members.forEach((m) => {
       m.x = undefined;
       m.y = undefined;
@@ -2237,6 +2458,27 @@ if (spotlightThemeStrip) {
 
 if (orgGroupPills) orgGroupPills.addEventListener("click", onOrgGroupPillClick);
 if (spotlightOrgStrip) spotlightOrgStrip.addEventListener("click", onOrgGroupPillClick);
+
+if (galaxyCardEl) {
+  galaxyCardEl.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-galaxy-view]");
+    if (tab) {
+      const mode = tab.dataset.galaxyView;
+      if (mode && mode !== state.galaxyViewMode) {
+        state.galaxyViewMode = mode;
+        if (mode === "skills") state.skillGalaxy = "all";
+        syncUI();
+      }
+      return;
+    }
+    const sk = event.target.closest("[data-skill-galaxy]");
+    if (sk) {
+      const raw = sk.dataset.skillGalaxy;
+      state.skillGalaxy = raw === "all" ? "all" : decodeURIComponent(raw);
+      syncUI();
+    }
+  });
+}
 
 if (spotlightFilters) {
   spotlightFilters.addEventListener("click", (event) => {

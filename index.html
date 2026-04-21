@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-cache" />
     <title>Geo Atlas</title>
-    <link rel="stylesheet" href="./styles.css?v=19" />
+    <link rel="stylesheet" href="./styles.css?v=20" />
   </head>
   <body>
     <div class="page-shell">
@@ -34,11 +34,16 @@
 
       <section class="visual-grid">
         <article class="card galaxy-card">
-          <div class="card-header slim">
-            <div>
+          <div class="galaxy-card-header">
+            <div class="galaxy-card-intro">
               <p class="card-kicker">Constellation</p>
               <h2>The community landscape</h2>
             </div>
+            <div class="galaxy-viz-switch" id="galaxy-viz-switch" role="tablist" aria-label="Constellation grouping"></div>
+          </div>
+          <div class="galaxy-skill-toolbar" id="galaxy-skill-toolbar" hidden>
+            <span class="galaxy-skill-toolbar-label">Skill</span>
+            <div class="theme-pills theme-pills--compact" id="galaxy-skill-pills"></div>
           </div>
 
           <div class="canvas-wrap">
@@ -97,6 +102,6 @@
 
     <script src="./cloud-config.js?v=14"></script>
     <script src="./members-data.js?v=14"></script>
-    <script src="./app.js?v=30"></script>
+    <script src="./app.js?v=31"></script>
   </body>
 </html>
