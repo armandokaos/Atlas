@@ -1023,7 +1023,7 @@ function memberSkillsList(member) {
   return Array.isArray(member?.skills) ? member.skills.filter(Boolean) : [];
 }
 
-/** Parse #RRGGBB curator color → rgba() for tinted UI (falls back to violet). */
+/** Parse #RRGGBB member theme color → rgba() for tinted UI (falls back to violet). */
 function accentRgbParts(hex) {
   const raw = String(hex || "").trim().replace(/^#/, "");
   if (!/^[0-9a-f]{6}$/i.test(raw)) return { r: 116, g: 71, b: 245 };
@@ -1564,7 +1564,7 @@ function renderDetail(member) {
             <span>${member.theme}</span>
           </div>
           <h2 class="detail-name">${member.name}</h2>
-          <p class="detail-description">${member.description || "This curator has not added a detailed bio yet."}</p>
+          <p class="detail-description">${member.description || "No detailed bio has been added yet."}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
             <div class="detail-markers-label">Your rating and tag</div>
@@ -1689,8 +1689,8 @@ function updateSummary(list) {
     count === members.length &&
     !state.query;
   selectionSummary.textContent = defaultBlurb
-    ? `${formatNumber(count)} curator profiles with bios, grouped by shared themes.`
-    : `${formatNumber(count)} curator profiles match "${activeTheme}"${state.query ? ` and "${state.query}"` : ""}${marks}.`;
+    ? `${formatNumber(count)} profiles with bios, grouped by shared themes.`
+    : `${formatNumber(count)} profiles match "${activeTheme}"${state.query ? ` and "${state.query}"` : ""}${marks}.`;
 }
 
 function anchorMap(list, width, height) {
