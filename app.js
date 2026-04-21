@@ -244,6 +244,9 @@ function normalizeMemberSkills(raw) {
 
 const GALAXY_SKILL_OTHER = "__galaxy_other__";
 
+/** Rayon visuel unique des nœuds constellation (anneaux), identique pour tous les profils. */
+const GALAXY_MEMBER_DOT_RADIUS = 11;
+
 /** Distinct hue per skill index (Skills galaxy); output is always `#rrggbb` for canvas alpha suffixes. */
 function galaxySkillHueToHex(index) {
   const h = ((index * 43.7 + 277) % 360) / 360;
@@ -347,7 +350,7 @@ const members = membersSourceFiltered.map((member, index) => {
     y: 0,
     vx: 0,
     vy: 0,
-    radius: 7 + Math.min(19, spaceCount * 1.42 + member.descLength / 58),
+    radius: GALAXY_MEMBER_DOT_RADIUS,
     seed: index * 0.37,
   };
 });
@@ -507,12 +510,31 @@ function galaxyMemberBaseColor(member) {
   return member.color;
 }
 
-function galaxyMemberFillColor(member, highlighted) {
-  const base = galaxyMemberBaseColor(member);
-  if (highlighted || memberIsGalaxyClusterFocused(member)) return base;
-  const alpha = isGalaxyClusterFocus() ? "e6" : "cc";
-  if (String(base).startsWith("#")) return `${base}${alpha}`;
-  return base;
+/** Constellation nodes: neutral interior + colored rim (no solid color disks). */
+function drawConstellationMemberRing(ctx, x, y, radius, baseHex, highlighted) {
+  const hex = String(baseHex || "#94A3B8");
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = highlighted ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.07)";
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  const lineW = Math.max(2, Math.min(3.6, radius * 0.3));
+  ctx.beginPath();
+  ctx.strokeStyle = hex;
+  ctx.lineWidth = lineW;
+  ctx.lineJoin = "round";
+  if (String(hex).startsWith("#") && hex.length >= 7) {
+    ctx.shadowBlur = highlighted ? 12 : 7;
+    ctx.shadowColor = `${hex}55`;
+  } else {
+    ctx.shadowBlur = highlighted ? 10 : 6;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.12)";
+  }
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
 }
 
 /** Immersive person → skills constellation (canvas-only). See plan: focus_personne_canvas */
@@ -1043,10 +1065,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.85;
     bgDots.forEach((d) => {
-      ctx.beginPath();
-      ctx.fillStyle = `${d.color}99`;
-      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-      ctx.fill();
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, false);
     });
     ctx.restore();
 
@@ -1066,10 +1085,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = 0.14;
     bgDots.forEach((d) => {
-      ctx.beginPath();
-      ctx.fillStyle = `${d.color}aa`;
-      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-      ctx.fill();
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, false);
     });
     ctx.restore();
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
@@ -1091,10 +1107,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.82;
     bgDots.forEach((d) => {
-      ctx.beginPath();
-      ctx.fillStyle = `${d.color}99`;
-      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-      ctx.fill();
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, false);
     });
     ctx.restore();
 
@@ -2105,12 +2118,9 @@ function renderRoster(list) {
   `;
 }
 
-/** Plafond rayon pastille constellation — garder aligné avec les marges disque Vogel. */
-const GALAXY_MEMBER_R_CAP = 52;
-
 /** Demi-axes du disque Vogel (un seul thème) : marge pour grosses pastilles + labels. */
 function galaxySingleDiskHalfExtents(width, height) {
-  const edge = 40 + GALAXY_MEMBER_R_CAP * 0.45;
+  const edge = 40 + GALAXY_MEMBER_DOT_RADIUS * 2.4;
   return {
     diskHalfW: Math.max(96, width * 0.47 - edge),
     diskHalfH: Math.max(92, height * 0.43 - edge),
@@ -2130,14 +2140,10 @@ function memberIsGalaxyHighlighted(member, selected, hoveredId) {
 }
 
 function memberDisplayRadius(member, selected, hoveredId) {
-  const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
-  let r = member.radius;
-  if (isGalaxyClusterFocus() && memberIsGalaxyClusterFocused(member)) {
-    const richness = Math.min(1, (member.descLength || 0) / 520 + (member.spaceCount || 0) / 10);
-    r *= Math.exp(0.38 + richness * 0.72);
-  }
-  if (highlighted) r += 6;
-  return Math.min(r, GALAXY_MEMBER_R_CAP);
+  void member;
+  void selected;
+  void hoveredId;
+  return GALAXY_MEMBER_DOT_RADIUS;
 }
 
 function truncateGalaxyLabel(name, max = 20) {
@@ -2277,7 +2283,7 @@ function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
     .map((m) => ({
       x: m.x,
       y: m.y,
-      color: m.color,
+      base: galaxyMemberBaseColor(m),
       r: memberDisplayRadius(m, selected, hoveredId),
     }));
 }
@@ -2356,14 +2362,7 @@ function drawFrame() {
   list.forEach((member) => {
     const highlighted = memberIsGalaxyHighlighted(member, selected, hoveredId);
     const radius = memberDisplayRadius(member, selected, hoveredId);
-
-    ctx.beginPath();
-    ctx.fillStyle = galaxyMemberFillColor(member, highlighted);
-    ctx.shadowBlur = highlighted ? 30 : isGalaxyClusterFocus() ? 24 : 18;
-    ctx.shadowColor = galaxyMemberBaseColor(member);
-    ctx.arc(member.x, member.y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    drawConstellationMemberRing(ctx, member.x, member.y, radius, galaxyMemberBaseColor(member), highlighted);
 
     if (highlighted) {
       ctx.beginPath();
