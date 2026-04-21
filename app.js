@@ -29,6 +29,82 @@ const ROSTER_PAGE1_PIN_ORDER = [
   "Victor Amigo",
 ];
 
+/**
+ * Org / team buckets (first matching row wins). Names must match `member.name` in `members-data`.
+ * Edit `names` for green / red / yellow lists when you assign people. "Walaa" → primary dev account `Walaa01` in data.
+ */
+const ORG_GROUP_RAW_SPECS = [
+  {
+    key: "geo-core",
+    label: "Geo core team",
+    names: ["Yaniv Tal", "Preston Mantel", "Nate", "Nik", "Adam Fischer", "Hugues de Braucourt", "Byron"],
+  },
+  {
+    key: "geo-content",
+    label: "Geo content team",
+    names: ["Bertrand Armando", "CptMoh", "Vytautas", "Hashir", "Rushab Taneja"],
+  },
+  { key: "geo-dev", label: "Geo core devs", names: ["Walaa01"] },
+  {
+    key: "curators-elite",
+    label: "Curators Elite",
+    names: [
+      "Iris",
+      "Kevin",
+      "Kevin Primicerio",
+      "MaximVL",
+      "Thomas Freestone",
+      "Federico Sendra",
+      "Victor Amigo",
+    ],
+  },
+  { key: "curators-green", label: "Curators (green list)", names: [] },
+  { key: "curators-red", label: "Curators (red list)", names: [] },
+  { key: "curators-yellow", label: "Curators (yellow list)", names: [] },
+];
+
+const ORG_GROUP_SPECS = ORG_GROUP_RAW_SPECS.map((row) => ({
+  key: row.key,
+  label: row.label,
+  names: new Set(row.names),
+}));
+
+const ORG_GROUP_LABEL_BY_KEY = {
+  ...Object.fromEntries(ORG_GROUP_RAW_SPECS.map((r) => [r.key, r.label])),
+  curators: "Curators",
+};
+
+const ORG_GROUP_PILL_ORDER = [
+  "all",
+  "geo-core",
+  "geo-content",
+  "geo-dev",
+  "curators-elite",
+  "curators-green",
+  "curators-red",
+  "curators-yellow",
+  "curators",
+];
+
+const ORG_GROUP_DOT_COLORS = {
+  "geo-core": "#0ea5e9",
+  "geo-content": "#8b5cf6",
+  "geo-dev": "#6366f1",
+  "curators-elite": "#ca8a04",
+  "curators-green": "#16a34a",
+  "curators-red": "#dc2626",
+  "curators-yellow": "#ca8a04",
+  curators: "#64748b",
+};
+
+function resolveOrgGroupKey(displayName) {
+  const n = String(displayName || "").trim();
+  for (const spec of ORG_GROUP_SPECS) {
+    if (spec.names.has(n)) return spec.key;
+  }
+  return "curators";
+}
+
 const data = window.GEO_CURATORS_DATA;
 const socialIcons = {
   x: `
@@ -170,11 +246,14 @@ const members = data.members
   .map((member, index) => {
     const spaces = (member.spaces || []).map(normalizeSpaceUrl).filter(Boolean);
     const spaceCount = spaces.length;
+    const orgGroup = resolveOrgGroupKey(member.name);
     return {
       isBoss: member.name === BOSS_NAME,
       ...member,
       spaces,
       spaceCount,
+      orgGroup,
+      orgGroupLabel: ORG_GROUP_LABEL_BY_KEY[orgGroup] || "Curators",
       skills: normalizeMemberSkills(member.skills),
       socialLinks: {
         x: normalizeXUrl(member.socialLinks?.x || ""),
@@ -190,6 +269,15 @@ const members = data.members
       seed: index * 0.37,
     };
   });
+
+ORG_GROUP_RAW_SPECS.forEach((spec) => {
+  if (!spec.names.length) return;
+  spec.names.forEach((n) => {
+    if (!members.some((m) => m.name === n)) {
+      console.warn(`[GeoAtlas] Team "${spec.label}" lists unknown profile name: "${n}"`);
+    }
+  });
+});
 
 const themeCounts = members.reduce((acc, member) => {
   acc[member.theme] = (acc[member.theme] || 0) + 1;
@@ -238,6 +326,7 @@ const demoMember =
 const state = {
   query: "",
   theme: "all",
+  orgGroup: "all",
   rosterFilter: "all",
   rosterPage: 1,
   starFilter: "all",
@@ -1248,7 +1337,7 @@ async function initCloudAuth() {
   renderMarksSyncPanel();
 }
 
-const __galaxyThemeForReset = { theme: state.theme };
+const __galaxyThemeForReset = { theme: state.theme, orgGroup: state.orgGroup };
 
 const canvas = document.querySelector("#galaxy-canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
@@ -1258,6 +1347,8 @@ if (typeof ctx.imageSmoothingQuality === "string") {
 const searchInput = document.querySelector("#search-input");
 const themePills = document.querySelector("#theme-pills");
 const spotlightThemeStrip = document.querySelector("#spotlight-theme-strip");
+const orgGroupPills = document.querySelector("#org-group-pills");
+const spotlightOrgStrip = document.querySelector("#spotlight-org-strip");
 const canvasWrap = document.querySelector(".canvas-wrap");
 const rosterGrid = document.querySelector("#roster-grid");
 const rosterPagination = document.querySelector("#roster-pagination");
@@ -1290,10 +1381,11 @@ function activeMembers() {
   const query = state.query.trim().toLowerCase();
   return members.filter((member) => {
     const matchTheme = state.theme === "all" || member.theme === state.theme;
+    const matchOrg = state.orgGroup === "all" || member.orgGroup === state.orgGroup;
     const skillsHay = memberSkillsList(member).join(" ");
-    const haystack = `${member.name} ${member.description} ${member.theme} ${skillsHay}`.toLowerCase();
+    const haystack = `${member.name} ${member.description} ${member.theme} ${member.orgGroupLabel} ${skillsHay}`.toLowerCase();
     const matchQuery = !query || haystack.includes(query);
-    return matchTheme && matchQuery;
+    return matchTheme && matchOrg && matchQuery;
   });
 }
 
@@ -1431,9 +1523,50 @@ function renderThemePillsInto(container, compact) {
     .join("");
 }
 
+function renderOrgGroupPillsInto(container, compact) {
+  if (!container) return;
+  const counts = new Map();
+  members.forEach((m) => {
+    counts.set(m.orgGroup, (counts.get(m.orgGroup) || 0) + 1);
+  });
+  const pills = ORG_GROUP_PILL_ORDER.map((key) => {
+    if (key === "all") {
+      return { key: "all", label: "All teams", color: "#EEF4FF", count: members.length };
+    }
+    return {
+      key,
+      label: ORG_GROUP_LABEL_BY_KEY[key] || key,
+      color: ORG_GROUP_DOT_COLORS[key] || "#94A3B8",
+      count: counts.get(key) || 0,
+    };
+  });
+  const compactClass = compact ? " theme-pill--compact" : "";
+  container.innerHTML = pills
+    .map(
+      (pill) => `
+        <button
+          class="theme-pill${compactClass} ${state.orgGroup === pill.key ? "active" : ""}"
+          data-org-group="${pill.key}"
+          type="button"
+        >
+          <span class="theme-dot" style="color:${pill.color}; background:${pill.color};"></span>
+          <span>${pill.label}</span>
+          <span class="theme-pill-count">${formatNumber(pill.count)}</span>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function buildOrgGroupPills() {
+  renderOrgGroupPillsInto(orgGroupPills, false);
+  renderOrgGroupPillsInto(spotlightOrgStrip, true);
+}
+
 function buildThemePills() {
   renderThemePillsInto(themePills, false);
   renderThemePillsInto(spotlightThemeStrip, true);
+  buildOrgGroupPills();
 }
 
 function renderStarRow(entityId, compact) {
@@ -1561,9 +1694,10 @@ function renderDetail(member) {
         <div class="detail-heading">
           <div class="detail-theme">
             <span class="theme-dot" style="color:${member.color}; background:${member.color};"></span>
-            <span>${member.theme}</span>
+            <span>${escapeHtml(member.theme)}</span>
           </div>
-          <h2 class="detail-name">${member.name}</h2>
+          <h2 class="detail-name">${escapeHtml(member.name)}</h2>
+          <p class="detail-org"><span class="detail-org-label">Team</span>${escapeHtml(member.orgGroupLabel)}</p>
           <p class="detail-description">${member.description || "No detailed bio has been added yet."}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
@@ -1586,7 +1720,7 @@ function renderRoster(list) {
   const total = sorted.length;
 
   if (!total) {
-    rosterGrid.innerHTML = `<div class="empty-state">No profiles match these filters. Try another category, search, link filter, or relax your star and tag filters.</div>`;
+    rosterGrid.innerHTML = `<div class="empty-state">No profiles match these filters. Try another team, category, search, link filter, or relax your star and tag filters.</div>`;
     rosterPagination.innerHTML = "";
     return;
   }
@@ -1605,8 +1739,10 @@ function renderRoster(list) {
         <article class="roster-item${member.entityId === state.selectedId ? " is-selected" : ""}" data-entity-id="${member.entityId}">
           <div class="roster-top">
             <div>
-              <p class="roster-name">${member.name}</p>
-              <p class="roster-theme">${member.isBoss ? "Founder" : member.theme}</p>
+              <p class="roster-name">${escapeHtml(member.name)}</p>
+              <p class="roster-theme">
+                <span class="roster-team">${escapeHtml(member.orgGroupLabel)}</span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
+              </p>
             </div>
             <div class="roster-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
               ${renderAvatar(member, "avatar-small")}
@@ -1679,6 +1815,7 @@ function truncateGalaxyLabel(name, max = 20) {
 function updateSummary(list) {
   const count = list.length;
   const activeTheme = state.theme === "all" ? "all themes" : state.theme;
+  const activeOrgLabel = state.orgGroup === "all" ? "" : ORG_GROUP_LABEL_BY_KEY[state.orgGroup] || "";
   const marks =
     state.starFilter !== "all" || state.badgeFilter !== "all"
       ? ", with your star and tag filters applied"
@@ -1687,10 +1824,18 @@ function updateSummary(list) {
     state.starFilter === "all" &&
     state.badgeFilter === "all" &&
     count === members.length &&
+    state.theme === "all" &&
+    state.orgGroup === "all" &&
     !state.query;
-  selectionSummary.textContent = defaultBlurb
-    ? `${formatNumber(count)} profiles with bios, grouped by shared themes.`
-    : `${formatNumber(count)} profiles match "${activeTheme}"${state.query ? ` and "${state.query}"` : ""}${marks}.`;
+  if (defaultBlurb) {
+    selectionSummary.textContent = `${formatNumber(count)} profiles with bios, grouped by shared themes.`;
+    return;
+  }
+  const bits = [];
+  if (activeOrgLabel) bits.push(activeOrgLabel);
+  if (state.theme !== "all") bits.push(activeTheme);
+  const filterPhrase = bits.length ? bits.join(" · ") : "current filters";
+  selectionSummary.textContent = `${formatNumber(count)} profiles match ${filterPhrase}${state.query ? ` · search “${state.query}”` : ""}${marks}.`;
 }
 
 function anchorMap(list, width, height) {
@@ -2013,8 +2158,9 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 
 function syncUI() {
   if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
-  if (__galaxyThemeForReset.theme !== state.theme) {
+  if (__galaxyThemeForReset.theme !== state.theme || __galaxyThemeForReset.orgGroup !== state.orgGroup) {
     __galaxyThemeForReset.theme = state.theme;
+    __galaxyThemeForReset.orgGroup = state.orgGroup;
     members.forEach((m) => {
       m.x = undefined;
       m.y = undefined;
@@ -2066,10 +2212,20 @@ function onThemePillClick(event) {
   syncUI();
 }
 
+function onOrgGroupPillClick(event) {
+  const button = event.target.closest("[data-org-group]");
+  if (!button) return;
+  state.orgGroup = button.dataset.orgGroup;
+  syncUI();
+}
+
 themePills.addEventListener("click", onThemePillClick);
 if (spotlightThemeStrip) {
   spotlightThemeStrip.addEventListener("click", onThemePillClick);
 }
+
+if (orgGroupPills) orgGroupPills.addEventListener("click", onOrgGroupPillClick);
+if (spotlightOrgStrip) spotlightOrgStrip.addEventListener("click", onOrgGroupPillClick);
 
 if (spotlightFilters) {
   spotlightFilters.addEventListener("click", (event) => {

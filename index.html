@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-cache" />
     <title>Geo Atlas</title>
-    <link rel="stylesheet" href="./styles.css?v=18" />
+    <link rel="stylesheet" href="./styles.css?v=19" />
   </head>
   <body>
     <div class="page-shell">
@@ -26,6 +26,10 @@
         </div>
 
         <div class="theme-pills" id="theme-pills"></div>
+        <div class="spotlight-org-row spotlight-org-row--controls" aria-label="Team filter">
+          <span class="spotlight-theme-label">Team</span>
+          <div class="theme-pills" id="org-group-pills"></div>
+        </div>
       </section>
 
       <section class="visual-grid">
@@ -68,6 +72,10 @@
               <span class="spotlight-theme-label">Category</span>
               <div class="theme-pills theme-pills--spotlight" id="spotlight-theme-strip" aria-label="Filter by category"></div>
             </div>
+            <div class="spotlight-org-row">
+              <span class="spotlight-theme-label">Team</span>
+              <div class="theme-pills theme-pills--spotlight" id="spotlight-org-strip" aria-label="Filter by team"></div>
+            </div>
             <div class="spotlight-filters" id="spotlight-filters"></div>
             <div class="marker-filters" id="marker-filters" aria-label="Filter by your ratings and color tags"></div>
           </div>
@@ -89,6 +97,6 @@
 
     <script src="./cloud-config.js?v=14"></script>
     <script src="./members-data.js?v=14"></script>
-    <script src="./app.js?v=27"></script>
+    <script src="./app.js?v=28"></script>
   </body>
 </html>

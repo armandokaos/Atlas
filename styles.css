@@ -434,6 +434,18 @@ h1 {
   gap: 10px 14px;
 }
 
+.spotlight-org-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 12px;
+}
+
+.spotlight-org-row--controls {
+  margin-top: 0;
+}
+
 .spotlight-theme-label {
   font-size: 0.72rem;
   letter-spacing: 0.14em;
@@ -1112,6 +1124,36 @@ h1 {
   font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: -0.04em;
+}
+
+.roster-team {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.roster-theme-split {
+  font-weight: 500;
+  opacity: 0.45;
+}
+
+.roster-theme-name {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.detail-org {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.detail-org-label {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  margin-right: 8px;
+  color: #b168ff;
 }
 
 .roster-theme {
