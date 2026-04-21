@@ -2448,36 +2448,6 @@ function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
     }));
 }
 
-/** Subtle member→cluster anchor curves (density guards for clarity). */
-function drawGalaxyLandscapeMemberLinks(targetCtx, list, anchors, width, height) {
-  void width;
-  void height;
-  const n = list.length;
-  const k = anchors.size;
-  if (!n || !k || isGalaxyClusterFocus()) return;
-  if (k > 7 || n > 88) return;
-  if (k === 1) return;
-  const baseAlpha = k <= 3 ? 0.09 : k <= 5 ? 0.065 : 0.048;
-  list.forEach((member) => {
-    if (!Number.isFinite(member.x) || !Number.isFinite(member.y)) return;
-    const clusterKey = getGalaxyClusterKey(member);
-    const anchor = anchors.get(clusterKey);
-    if (!anchor) return;
-    const color = getGalaxyClusterColor(clusterKey);
-    const { cx, cy } = gfQuadraticBridgeControl(member.x, member.y, anchor.x, anchor.y, 0.052);
-    targetCtx.save();
-    targetCtx.globalAlpha = baseAlpha;
-    targetCtx.beginPath();
-    targetCtx.moveTo(member.x, member.y);
-    targetCtx.quadraticCurveTo(cx, cy, anchor.x, anchor.y);
-    targetCtx.strokeStyle = color;
-    targetCtx.lineWidth = 1.2;
-    targetCtx.lineCap = "round";
-    targetCtx.stroke();
-    targetCtx.restore();
-  });
-}
-
 function drawFrame() {
   resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
@@ -2512,33 +2482,20 @@ function drawFrame() {
   const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
   const { diskHalfW, diskHalfH } = diskExtents;
   const span = Math.min(width, height);
-  const ringRadius = singleThemeDisk
-    ? Math.max(diskHalfW, diskHalfH)
+  const labelLift = singleThemeDisk
+    ? 0
     : isGalaxyClusterFocus()
       ? span * 0.124
       : span * 0.096;
   anchors.forEach((anchor, clusterKey) => {
-    const color = getGalaxyClusterColor(clusterKey);
-    const ringLW = singleThemeDisk ? 0.9 : isGalaxyClusterFocus() ? 1 : 0.75;
-    ctx.beginPath();
-    if (singleThemeDisk && typeof ctx.ellipse === "function") {
-      ctx.ellipse(anchor.x, anchor.y, diskHalfW * 0.98, diskHalfH * 0.98, 0, 0, Math.PI * 2);
-    } else {
-      ctx.arc(anchor.x, anchor.y, ringRadius, 0, Math.PI * 2);
-    }
-    ctx.strokeStyle = `${color}20`;
-    ctx.lineWidth = ringLW;
-    ctx.stroke();
-
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.font = isGalaxyClusterFocus() ? CANVAS_FONT_CLUSTER_FOCUS : CANVAS_FONT_CLUSTER;
     const rawLabel = truncateGalaxyLabel(getGalaxyClusterLabel(clusterKey), 34);
     const label = rawLabel.toUpperCase();
-    const tw = ctx.measureText(label).width;
     const labelY = singleThemeDisk
       ? Math.max(14, anchor.y - diskHalfH + 16)
-      : anchor.y - ringRadius - 14;
+      : anchor.y - labelLift - 14;
     ctx.lineJoin = "round";
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
@@ -2549,8 +2506,6 @@ function drawFrame() {
   ctx.restore();
 
   stepMemberLayoutPhysics(list, width, height, now, null);
-
-  drawGalaxyLandscapeMemberLinks(ctx, list, anchors, width, height);
 
   list.forEach((member) => {
     const interaction = memberRingInteraction(member, selected, hoveredId);
