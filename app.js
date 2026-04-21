@@ -1624,11 +1624,8 @@ __galaxyMotionMql.addEventListener?.("change", (e) => {
 });
 
 /** Shared canvas tokens (paysage + focus) — dataviz-style hierarchy. */
-const CANVAS_FONT_CLUSTER = '600 10px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
-const CANVAS_FONT_CLUSTER_FOCUS = '600 11px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
 const CANVAS_FONT_MEMBER_NAMES = '600 11px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
 const CANVAS_FONT_MEMBER_PIN = '600 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
-const CANVAS_TEXT_CLUSTER = "rgba(28, 24, 42, 0.82)";
 const CANVAS_TEXT_MEMBER = "rgba(28, 24, 42, 0.92)";
 const CANVAS_TEXT_MEMBER_MUTED = "rgba(28, 24, 42, 0.78)";
 
@@ -2472,38 +2469,9 @@ function drawFrame() {
 
   const selected = selectedMember(list);
   const hoveredId = state.hoveredId;
-  const anchors = anchorMap(list, width, height);
 
   ctx.clearRect(0, 0, width, height);
   drawGalaxyCanvasAtmosphere(ctx, width, height);
-
-  ctx.save();
-  const singleThemeDisk = anchors.size === 1;
-  const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
-  const { diskHalfW, diskHalfH } = diskExtents;
-  const span = Math.min(width, height);
-  const labelLift = singleThemeDisk
-    ? 0
-    : isGalaxyClusterFocus()
-      ? span * 0.124
-      : span * 0.096;
-  anchors.forEach((anchor, clusterKey) => {
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.font = isGalaxyClusterFocus() ? CANVAS_FONT_CLUSTER_FOCUS : CANVAS_FONT_CLUSTER;
-    const rawLabel = truncateGalaxyLabel(getGalaxyClusterLabel(clusterKey), 34);
-    const label = rawLabel.toUpperCase();
-    const labelY = singleThemeDisk
-      ? Math.max(14, anchor.y - diskHalfH + 16)
-      : anchor.y - labelLift - 14;
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
-    ctx.strokeText(label, anchor.x, labelY);
-    ctx.fillStyle = CANVAS_TEXT_CLUSTER;
-    ctx.fillText(label, anchor.x, labelY);
-  });
-  ctx.restore();
 
   stepMemberLayoutPhysics(list, width, height, now, null);
 
