@@ -414,7 +414,7 @@ const state = {
   orgGroup: "all",
   /** Galaxy layout: `category` (theme), `team` (org), `skills` (skills with ≥2 profiles in loaded data). */
   galaxyViewMode: "category",
-  /** When `galaxyViewMode === "skills"`, which skill cluster is emphasized (matches `skillClusterKey`). */
+  /** When `galaxyViewMode === "skills"`, which skill is focused (everyone listed with that skill). */
   skillGalaxy: "all",
   rosterFilter: "all",
   rosterPage: 1,
@@ -449,7 +449,10 @@ function uiMembers() {
 
 function getGalaxyClusterKey(member) {
   if (state.galaxyViewMode === "team") return memberOrgGroupKey(member);
-  if (state.galaxyViewMode === "skills") return member.skillClusterKey;
+  if (state.galaxyViewMode === "skills") {
+    if (state.skillGalaxy !== "all") return state.skillGalaxy;
+    return member.skillClusterKey;
+  }
   return member.theme;
 }
 
@@ -498,14 +501,17 @@ function memberIsGalaxyClusterFocused(member) {
   if (!isGalaxyClusterFocus()) return false;
   if (state.galaxyViewMode === "category") return member.theme === state.theme;
   if (state.galaxyViewMode === "team") return memberOrgGroupKey(member) === state.orgGroup;
-  return member.skillClusterKey === state.skillGalaxy;
+  return memberMatchesSkillGalaxyFilter(member);
 }
 
 function galaxyMemberBaseColor(member) {
   const tag = getPersonalBadge(member.entityId);
   if (tag) return BADGE_META[tag].hex;
   if (member.isBoss) return BOSS_COLOR;
-  if (state.galaxyViewMode === "skills") return galaxySkillHex(member.skillClusterKey);
+  if (state.galaxyViewMode === "skills") {
+    if (state.skillGalaxy !== "all") return galaxySkillHex(state.skillGalaxy);
+    return galaxySkillHex(member.skillClusterKey);
+  }
   if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[memberOrgGroupKey(member)] || "#94A3B8";
   return member.color;
 }
@@ -1614,14 +1620,21 @@ function memberMatchesGalaxyRollupFilters(member) {
   return matchTheme && matchOrg && matchQuery;
 }
 
+/** Skills galaxy filter: top keys = anyone who lists that skill; Other = cluster-only bucket. */
+function memberMatchesSkillGalaxyFilter(member) {
+  if (state.skillGalaxy === "all") return true;
+  if (state.skillGalaxy === GALAXY_SKILL_OTHER) return member.skillClusterKey === GALAXY_SKILL_OTHER;
+  if (!GALAXY_TOP_SKILL_KEYS.includes(state.skillGalaxy)) return false;
+  for (const s of member.skills) {
+    if (String(s).trim().toLowerCase() === state.skillGalaxy) return true;
+  }
+  return false;
+}
+
 function activeMembers() {
   return uiMembers().filter((member) => {
     if (!memberMatchesGalaxyRollupFilters(member)) return false;
-    const matchSkillGalaxy =
-      state.galaxyViewMode !== "skills" ||
-      state.skillGalaxy === "all" ||
-      member.skillClusterKey === state.skillGalaxy;
-    return matchSkillGalaxy;
+    return state.galaxyViewMode !== "skills" || memberMatchesSkillGalaxyFilter(member);
   });
 }
 
@@ -1838,8 +1851,17 @@ function renderGalaxySkillPillsStrip() {
   const rollup = uiMembers().filter(memberMatchesGalaxyRollupFilters);
   const counts = new Map();
   rollup.forEach((m) => {
-    const k = m.skillClusterKey;
-    counts.set(k, (counts.get(k) || 0) + 1);
+    if (m.skillClusterKey === GALAXY_SKILL_OTHER) {
+      counts.set(GALAXY_SKILL_OTHER, (counts.get(GALAXY_SKILL_OTHER) || 0) + 1);
+    }
+    const seenSkill = new Set();
+    for (const raw of m.skills) {
+      const k = String(raw).trim().toLowerCase();
+      if (!GALAXY_TOP_SKILL_KEYS.includes(k)) continue;
+      if (seenSkill.has(k)) continue;
+      seenSkill.add(k);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
   });
   if (
     state.skillGalaxy !== "all" &&
