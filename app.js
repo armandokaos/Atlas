@@ -1735,12 +1735,22 @@ function renderGalaxySkillPillsStrip() {
     return;
   }
   bar.hidden = false;
-  const keys = ["all", ...GALAXY_TOP_SKILL_KEYS, GALAXY_SKILL_OTHER];
   const counts = new Map();
   members.forEach((m) => {
     const k = m.skillClusterKey;
     counts.set(k, (counts.get(k) || 0) + 1);
   });
+  if (
+    state.skillGalaxy !== "all" &&
+    (state.skillGalaxy === GALAXY_SKILL_OTHER
+      ? (counts.get(GALAXY_SKILL_OTHER) || 0) === 0
+      : (counts.get(state.skillGalaxy) || 0) < 2)
+  ) {
+    state.skillGalaxy = "all";
+  }
+  const keysWithPeople = GALAXY_TOP_SKILL_KEYS.filter((k) => (counts.get(k) || 0) >= 2);
+  const keys = ["all", ...keysWithPeople];
+  if ((counts.get(GALAXY_SKILL_OTHER) || 0) > 0) keys.push(GALAXY_SKILL_OTHER);
   const pills = keys.map((key) => {
     if (key === "all") {
       return { key: "all", label: "All skills", color: "#EEF4FF", count: members.length };
