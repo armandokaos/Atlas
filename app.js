@@ -44,7 +44,7 @@ const ORG_GROUP_RAW_SPECS = [
     label: "Geo content team",
     names: ["Bertrand Armando", "CptMoh", "Vytautas", "Hashir", "Rushab Taneja", "Ahmed Abdelmalek", "Dan Cordie"],
   },
-  { key: "geo-dev", label: "Geo core devs", names: ["Walaa01"] },
+  { key: "geo-dev", label: "Geo core devs", names: ["Walaa01", "Rex"] },
   {
     key: "curators-elite",
     label: "Curators Elite",
