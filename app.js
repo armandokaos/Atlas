@@ -330,8 +330,8 @@ function gfBuildSkillNodes(skills, cx, cy, width, height) {
   const extra = skills.length - capped.length;
   const labels = extra > 0 ? [...capped, `+${extra}`] : capped;
   const n = labels.length;
-  const diskW = Math.max(72, Math.min(width * 0.38, 280));
-  const diskH = Math.max(72, Math.min(height * 0.34, 240));
+  const diskW = Math.max(92, Math.min(width * 0.46, 340));
+  const diskH = Math.max(92, Math.min(height * 0.42, 300));
   const nodes = labels.map((name, index) => {
     const idx = index + 1;
     const golden = idx * 2.39996322972865332;
@@ -353,7 +353,7 @@ function gfBuildSkillNodes(skills, cx, cy, width, height) {
 }
 
 function gfRelaxSkillNodes(nodes) {
-  const minDist = 54;
+  const minDist = 72;
   for (let pass = 0; pass < 3; pass += 1) {
     for (let i = 0; i < nodes.length; i += 1) {
       for (let j = i + 1; j < nodes.length; j += 1) {
@@ -457,29 +457,32 @@ function gfLerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-/** Flottement des pastilles skills (liens + hit-test alignés). Entrée/sortie : amplitude progressive. */
+/** Flottement des pastilles skills — amplitudes nettes (px logiques canvas), liens + hit-test alignés. */
 function gfSkillNodeFloat(node, index, now) {
   let amp = 1;
   if (galaxyFocus.mode === "enter") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_ENTER_MS);
-    amp = gfSmoothstep01(Math.max(0, (p - 0.28) / 0.55));
+    amp = gfSmoothstep01(Math.max(0, (p - 0.18) / 0.62));
   } else if (galaxyFocus.mode === "exit") {
     const p = Math.min(1, (now - galaxyFocus.transitionStart) / GALAXY_FOCUS_EXIT_MS);
     amp = gfSmoothstep01(1 - p);
   } else if (galaxyFocus.mode !== "person") {
     return { ox: 0, oy: 0 };
   }
-  const t = now * 0.00034;
   const ph = node.golden + index * 0.71;
-  return {
-    ox: (Math.sin(t + ph) * 6 + Math.cos(t * 0.82 + ph * 1.22) * 3.2) * amp,
-    oy: (Math.cos(t * 0.88 + ph) * 5.5 + Math.sin(t * 0.64 + ph * 1.08) * 2.8) * amp,
-  };
+  const t = now * 0.00092;
+  const wob = now * 0.00185 + ph * 2.08;
+  const ox1 = Math.sin(t + ph) * 16 + Math.cos(t * 0.79 + ph * 1.31) * 10;
+  const oy1 = Math.cos(t * 0.86 + ph) * 14 + Math.sin(t * 0.61 + ph * 1.11) * 9;
+  const ox2 = Math.cos(wob) * 7 + Math.sin(wob * 0.71 + 1.4) * 5;
+  const oy2 = Math.sin(wob * 0.77) * 6 + Math.cos(wob * 0.58 + 0.35) * 5;
+  return { ox: (ox1 + ox2) * amp, oy: (oy1 + oy2) * amp };
 }
 
 function gfSkillNodeRadius(node) {
-  if (node.isMore) return 8;
-  return 8 + Math.min(12, String(node.name).length * 0.52);
+  if (node.isMore) return 16;
+  const len = String(node.name).length;
+  return 15 + Math.min(20, len * 1.08);
 }
 
 /** Fond neutre type produit SaaS — pas de « mesh » ni halos multiples. */
@@ -591,11 +594,11 @@ function gfDrawSkillNodes(ctx, nodes, skillsAlpha, spin, now, grpOx = 0, grpOy =
     ctx.lineWidth = 2;
     ctx.arc(x, y, rDraw - 0.5, 0, Math.PI * 2);
     ctx.stroke();
-    const label = truncateGalaxyLabel(node.name, 24);
+    const label = truncateGalaxyLabel(node.name, 28);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.font = '500 12px ui-sans-serif, system-ui, -apple-system, sans-serif';
-    const ty = y + rDraw + 8;
+    ctx.font = '500 13px ui-sans-serif, system-ui, -apple-system, sans-serif';
+    const ty = y + rDraw + 9;
     ctx.fillStyle = "rgba(15, 12, 24, 0.78)";
     ctx.fillText(label, x, ty);
     ctx.restore();
@@ -683,12 +686,12 @@ function gfCurrentHubGeometry(now, width, height) {
   const cx = width / 2;
   const cy = height / 2;
   if (galaxyFocus.mode === "person") {
-    const t = now * 0.00038;
-    const driftX = Math.sin(t) * 11 + Math.cos(t * 0.61 + 0.45) * 5;
-    const driftY = Math.cos(t * 0.49) * 9 + Math.sin(t * 0.7 + 1.15) * 4.5;
+    const t = now * 0.00036;
+    const driftX = Math.sin(t) * 18 + Math.cos(t * 0.59 + 0.42) * 9;
+    const driftY = Math.cos(t * 0.47) * 15 + Math.sin(t * 0.68 + 1.1) * 8;
     const hx = cx + driftX;
     const hy = cy + driftY;
-    const rBreath = Math.sin(t * 1.06) * 0.078 + Math.sin(t * 0.48 + 2) * 0.034;
+    const rBreath = Math.sin(t * 1.04) * 0.095 + Math.sin(t * 0.46 + 2) * 0.042;
     const hubR = galaxyFocus.hubTargetR * (1 + rBreath);
     return { hx, hy, hubR, hubGrowT: 1 };
   }
@@ -736,7 +739,7 @@ function gfGalaxyPointerTargets(x, y, now, width, height) {
     const nx = node.tx + ox + grpOx;
     const ny = node.ty + oy + grpOy;
     const nr = gfSkillNodeRadius(node);
-    if (Math.hypot(x - nx, y - ny) <= nr + 14) return "skill";
+    if (Math.hypot(x - nx, y - ny) <= nr + 20) return "skill";
   }
   return "empty";
 }
