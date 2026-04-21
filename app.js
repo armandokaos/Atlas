@@ -77,7 +77,6 @@ const ORG_GROUP_PILL_ORDER = [
   "curators-red",
   "curators-yellow",
   "curators-orange",
-  "curators",
 ];
 
 const ORG_GROUP_DOT_COLORS = {
@@ -1753,6 +1752,7 @@ function renderThemePillsInto(container, compact) {
 
 function renderOrgGroupPillsInto(container, compact) {
   if (!container) return;
+  if (state.orgGroup === "curators") state.orgGroup = "all";
   const counts = new Map();
   const source = uiMembers();
   source.forEach((m) => {
