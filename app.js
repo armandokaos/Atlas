@@ -1417,7 +1417,13 @@ function renderDetailSkillsSection(member) {
   if (!skills.length) return "";
   const { r, g, b } = accentRgbParts(member.color || "#7447f5");
   const sep = '<span class="detail-skill-sep" aria-hidden="true">·</span>';
-  const prose = skills.map((s) => `<span class="detail-skill-item">${escapeHtml(String(s))}</span>`).join(sep);
+  const prose = skills
+    .map((s) => {
+      const k = String(s).trim().toLowerCase();
+      const enc = encodeURIComponent(k);
+      return `<button type="button" class="detail-skill-item" data-skill-nav="${enc}" title="Show everyone with this skill">${escapeHtml(String(s))}</button>`;
+    })
+    .join(sep);
   return `
     <section class="detail-skills" aria-label="Skills" style="--detail-accent-r:${r};--detail-accent-g:${g};--detail-accent-b:${b}">
       <h3 class="detail-section-title">Skills</h3>
@@ -1468,7 +1474,13 @@ function renderRosterSkillsChips(member, maxWords = 10) {
   const shown = skills.slice(0, maxWords);
   const extra = skills.length - shown.length;
   const sep = '<span class="roster-skills-sep" aria-hidden="true">·</span>';
-  const body = shown.map((s) => escapeHtml(String(s))).join(sep);
+  const body = shown
+    .map((s) => {
+      const k = String(s).trim().toLowerCase();
+      const enc = encodeURIComponent(k);
+      return `<button type="button" class="roster-skill-chip" data-skill-nav="${enc}" title="Show everyone with this skill">${escapeHtml(String(s))}</button>`;
+    })
+    .join(sep);
   const tail =
     extra > 0 ? ` <span class="roster-skills-more" style="color:rgba(${r},${g},${b},0.82)">+${extra}</span>` : "";
   return `<div class="roster-skills"><p class="roster-skills-line">${body}${tail}</p></div>`;
@@ -1765,22 +1777,35 @@ function memberMatchesGalaxyRollupFilters(member) {
 function readSkillGalaxyPillKey(el) {
   const raw = el.getAttribute("data-skill-galaxy");
   if (raw == null || raw === "" || raw === "all") return "all";
+  let decoded;
   try {
-    return decodeURIComponent(raw);
+    decoded = decodeURIComponent(raw);
   } catch {
-    return raw;
+    decoded = raw;
   }
+  const k = String(decoded).trim().toLowerCase();
+  if (!k || k === "all") return "all";
+  if (k === GALAXY_SKILL_OTHER) return GALAXY_SKILL_OTHER;
+  return k;
 }
 
-/** Skills galaxy filter: top keys = anyone who lists that skill; Other = cluster-only bucket. */
+/** Skills galaxy filter: match normalized skill text; Other = cluster-only bucket. */
 function memberMatchesSkillGalaxyFilter(member) {
   if (state.skillGalaxy === "all") return true;
   if (state.skillGalaxy === GALAXY_SKILL_OTHER) return member.skillClusterKey === GALAXY_SKILL_OTHER;
-  if (!GALAXY_TOP_SKILL_KEYS.includes(state.skillGalaxy)) return false;
-  for (const s of member.skills) {
-    if (String(s).trim().toLowerCase() === state.skillGalaxy) return true;
+  const key = state.skillGalaxy;
+  for (const s of memberSkillsList(member)) {
+    if (String(s).trim().toLowerCase() === key) return true;
   }
   return false;
+}
+
+function navigateToSkillGalaxyFilter(skillKeyRaw) {
+  const skillKey = String(skillKeyRaw || "").trim().toLowerCase();
+  if (!skillKey) return;
+  state.galaxyViewMode = "skills";
+  state.skillGalaxy = skillKey;
+  syncUI();
 }
 
 function activeMembers() {
@@ -2009,7 +2034,7 @@ function renderGalaxySkillPillsStrip() {
     const seenSkill = new Set();
     for (const raw of m.skills) {
       const k = String(raw).trim().toLowerCase();
-      if (!GALAXY_TOP_SKILL_KEYS.includes(k)) continue;
+      if (!k) continue;
       if (seenSkill.has(k)) continue;
       seenSkill.add(k);
       counts.set(k, (counts.get(k) || 0) + 1);
@@ -2019,12 +2044,20 @@ function renderGalaxySkillPillsStrip() {
     state.skillGalaxy !== "all" &&
     (state.skillGalaxy === GALAXY_SKILL_OTHER
       ? (counts.get(GALAXY_SKILL_OTHER) || 0) === 0
-      : (counts.get(state.skillGalaxy) || 0) < 2)
+      : (counts.get(state.skillGalaxy) || 0) < 1)
   ) {
     state.skillGalaxy = "all";
   }
   const keysWithPeople = GALAXY_TOP_SKILL_KEYS.filter((k) => (counts.get(k) || 0) >= 2);
-  const keys = ["all", ...keysWithPeople];
+  const extraMulti = [...counts.keys()].filter(
+    (k) => k !== GALAXY_SKILL_OTHER && (counts.get(k) || 0) >= 2 && !keysWithPeople.includes(k),
+  );
+  extraMulti.sort((a, b) => (counts.get(b) - counts.get(a)) || String(a).localeCompare(String(b)));
+  const keys = ["all", ...keysWithPeople, ...extraMulti];
+  const sg = state.skillGalaxy;
+  if (sg !== "all" && sg !== GALAXY_SKILL_OTHER && (counts.get(sg) || 0) >= 1 && !keys.includes(sg)) {
+    keys.push(sg);
+  }
   if ((counts.get(GALAXY_SKILL_OTHER) || 0) > 0) keys.push(GALAXY_SKILL_OTHER);
   const pills = keys
     .map((key) => {
@@ -2716,7 +2749,8 @@ if (galaxySkillPills) {
     const sk = event.target.closest("[data-skill-galaxy]");
     if (!sk || !galaxySkillPills.contains(sk)) return;
     event.stopPropagation();
-    state.skillGalaxy = readSkillGalaxyPillKey(sk);
+    const pillKey = readSkillGalaxyPillKey(sk);
+    state.skillGalaxy = pillKey;
     syncUI();
   });
 }
@@ -2803,12 +2837,7 @@ canvas.addEventListener("click", (event) => {
       const node = idx >= 0 ? galaxyFocus.skillNodes[idx] : null;
       if (node && !node.isMore) {
         const skillKey = String(node.name).trim().toLowerCase();
-        if (GALAXY_TOP_SKILL_KEYS.includes(skillKey)) {
-          state.galaxyViewMode = "skills";
-          state.skillGalaxy = skillKey;
-          syncUI();
-          return;
-        }
+        if (skillKey) navigateToSkillGalaxyFilter(skillKey);
       }
       return;
     }
@@ -2836,6 +2865,24 @@ window.addEventListener("keydown", (event) => {
 
 if (rosterGrid) {
   rosterGrid.addEventListener("click", (event) => {
+    const skillBtn = event.target.closest("[data-skill-nav]");
+    if (skillBtn && rosterGrid.contains(skillBtn)) {
+      const raw = skillBtn.getAttribute("data-skill-nav");
+      let key = "";
+      if (raw && raw !== "all") {
+        try {
+          key = decodeURIComponent(raw);
+        } catch {
+          key = raw;
+        }
+      }
+      if (key) {
+        navigateToSkillGalaxyFilter(key);
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
     const starBtn = event.target.closest("[data-star]");
     if (starBtn) {
       const card = starBtn.closest("[data-entity-id]");
@@ -2868,6 +2915,23 @@ if (rosterGrid) {
 
 if (detailCard) {
   detailCard.addEventListener("click", (event) => {
+    const skillBtn = event.target.closest("[data-skill-nav]");
+    if (skillBtn && detailCard.contains(skillBtn)) {
+      const raw = skillBtn.getAttribute("data-skill-nav");
+      let key = "";
+      if (raw && raw !== "all") {
+        try {
+          key = decodeURIComponent(raw);
+        } catch {
+          key = raw;
+        }
+      }
+      if (key) {
+        navigateToSkillGalaxyFilter(key);
+        event.preventDefault();
+      }
+      return;
+    }
     const wrap = event.target.closest(".detail-markers");
     if (!wrap) return;
     const id = wrap.dataset.entityId;

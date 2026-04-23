@@ -853,8 +853,56 @@ h1 {
 }
 
 .detail-skill-item {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-weight: 520;
+  letter-spacing: inherit;
+  line-height: inherit;
   color: rgba(32, 29, 41, 0.94);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(116, 71, 245, 0.35);
+  text-underline-offset: 0.18em;
+  border-radius: 4px;
+}
+
+.detail-skill-item:hover {
+  color: rgba(72, 48, 168, 0.98);
+  text-decoration-color: rgba(116, 71, 245, 0.55);
+}
+
+.detail-skill-item:focus-visible {
+  outline: 2px solid rgba(116, 71, 245, 0.45);
+  outline-offset: 2px;
+}
+
+.roster-skill-chip {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(116, 71, 245, 0.28);
+  text-underline-offset: 0.15em;
+  border-radius: 3px;
+}
+
+.roster-skill-chip:hover {
+  text-decoration-color: rgba(116, 71, 245, 0.5);
+}
+
+.roster-skill-chip:focus-visible {
+  outline: 2px solid rgba(116, 71, 245, 0.4);
+  outline-offset: 1px;
 }
 
 .detail-skills .detail-section-title {
