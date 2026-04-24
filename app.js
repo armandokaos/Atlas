@@ -2819,14 +2819,10 @@ function galaxyPseudoSpreadAnchor(member, width, height) {
   };
 }
 
-/**
- * Keep Engineering & AI category on the same orbital animation feel as "All"
- * (avoid forcing the single-cluster Vogel disk in that specific case).
- */
 function shouldUseSingleThemeDisk(anchors) {
   if (!anchors || anchors.size !== 1) return false;
-  if (state.galaxyViewMode === "category" && state.theme === "Engineering & AI") return false;
-  return true;
+  /** Apply All-style orbital motion to every visualization/filter mode. */
+  return false;
 }
 
 function readCanvasCssSize() {
