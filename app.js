@@ -2801,6 +2801,16 @@ function anchorMap(list, width, height) {
   );
 }
 
+/**
+ * Keep Engineering & AI category on the same orbital animation feel as "All"
+ * (avoid forcing the single-cluster Vogel disk in that specific case).
+ */
+function shouldUseSingleThemeDisk(anchors) {
+  if (!anchors || anchors.size !== 1) return false;
+  if (state.galaxyViewMode === "category" && state.theme === "Engineering & AI") return false;
+  return true;
+}
+
 function readCanvasCssSize() {
   let w = canvas.clientWidth;
   let h = canvas.clientHeight;
@@ -2840,7 +2850,7 @@ function snapSingleThemeVogelPositions(list) {
   __galaxyVisibleCountForRadius = galaxyRadiusLayoutCountFromList(list);
   const { width, height } = readCanvasCssSize();
   const anchors = anchorMap(list, width, height);
-  if (anchors.size !== 1) return;
+  if (!shouldUseSingleThemeDisk(anchors)) return;
   const { diskHalfW, diskHalfH } = galaxySingleDiskHalfExtents(width, height);
   const anchor = [...anchors.values()][0];
   const n = Math.max(list.length, 1);
@@ -2929,7 +2939,7 @@ function applyGalaxyMemberNonOverlap(list, radiusPx, freezeEntityId = null) {
 function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null) {
   __galaxyVisibleCountForRadius = galaxyRadiusLayoutCountFromList(list);
   const anchors = anchorMap(list, width, height);
-  const singleThemeDisk = anchors.size === 1;
+  const singleThemeDisk = shouldUseSingleThemeDisk(anchors);
   const orbitScale = galaxyOrbitScale();
   const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
   const { diskHalfW, diskHalfH } = diskExtents;
