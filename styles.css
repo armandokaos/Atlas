@@ -691,6 +691,10 @@ h1 {
   pointer-events: none;
 }
 
+.galaxy-canvas-legend[hidden] {
+  display: none !important;
+}
+
 .galaxy-canvas-legend__inner {
   display: inline-flex;
   flex-wrap: wrap;

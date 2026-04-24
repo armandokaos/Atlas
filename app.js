@@ -3097,28 +3097,12 @@ function renderGalaxyCanvasLegend() {
   const el = document.querySelector("#galaxy-canvas-legend");
   if (!el) return;
   if (galaxyFocus.mode !== "landscape") {
+    el.removeAttribute("hidden");
     el.innerHTML = `<div class="galaxy-canvas-legend__inner galaxy-canvas-legend__inner--focus"><span>${escapeHtml("Esc — return to map")}</span></div>`;
     return;
   }
-  const list = visibleMembers();
-  const mode = galaxyCanvasViewModeLabel();
-  const filterLabel =
-    state.galaxyViewMode === "skills" && state.skillGalaxy !== "all"
-      ? String(GALAXY_SKILL_LABEL_BY_KEY.get(state.skillGalaxy) || state.skillGalaxy || "").trim()
-      : "";
-  const safeFilter = filterLabel ? escapeHtml(truncateGalaxyLabel(filterLabel, 28)) : "";
-  const parts = [
-    `<span class="galaxy-canvas-legend__mode">${escapeHtml(mode)}</span>`,
-    `<span class="galaxy-canvas-legend__sep" aria-hidden="true">·</span>`,
-    `<span class="galaxy-canvas-legend__count">${formatNumber(list.length)} visible</span>`,
-  ];
-  if (safeFilter) {
-    parts.push(`<span class="galaxy-canvas-legend__sep" aria-hidden="true">·</span>`, `<span class="galaxy-canvas-legend__filter">${safeFilter}</span>`);
-  }
-  parts.push(
-    `<span class="galaxy-canvas-legend__hint">${escapeHtml("Click a profile with skills to focus")}</span>`,
-  );
-  el.innerHTML = `<div class="galaxy-canvas-legend__inner">${parts.join("")}</div>`;
+  el.innerHTML = "";
+  el.setAttribute("hidden", "");
 }
 
 loadPersonalMarks();
