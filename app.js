@@ -52,7 +52,7 @@ const ORG_GROUP_RAW_SPECS = [
     names: [],
   },
   { key: "curators-green", label: "Curators green", names: [] },
-  { key: "curators-red", label: "Curators Red", names: [] },
+  { key: "curators-orange", label: "Curators Orange", names: [] },
   { key: "curators-yellow", label: "Curators yellow", names: [] },
   { key: "curators-grey", label: "Curators grey", names: [] },
 ];
@@ -75,7 +75,7 @@ const ORG_GROUP_PILL_ORDER = [
   "geo-dev",
   "curators-elite",
   "curators-green",
-  "curators-red",
+  "curators-orange",
   "curators-yellow",
   "curators-grey",
   /** Default bucket: not in named geo teams and no badge mapped to a curator color (incl. blue/purple/black tags). */
@@ -88,7 +88,7 @@ const ORG_GROUP_DOT_COLORS = {
   "geo-dev": "#6366f1",
   "curators-elite": "#db2777",
   "curators-green": "#16a34a",
-  "curators-red": "#dc2626",
+  "curators-orange": "#ea580c",
   "curators-yellow": "#ca8a04",
   "curators-grey": "#6b7280",
   curators: "#64748b",
@@ -96,7 +96,7 @@ const ORG_GROUP_DOT_COLORS = {
 
 const BADGE_TO_ORG_GROUP = {
   green: "curators-green",
-  red: "curators-red",
+  red: "curators-orange",
   yellow: "curators-yellow",
   pink: "curators-elite",
   orange: "curators-grey",
@@ -1346,7 +1346,7 @@ const BADGE_META = {
   blue: { label: "Core team", hex: "#2563eb" },
   purple: { label: "Content team", hex: "#9333ea" },
   pink: { label: "Curators elite", hex: "#db2777" },
-  red: { label: "Curators Red", hex: "#dc2626" },
+  red: { label: "Curators Orange", hex: "#ea580c" },
   green: { label: "Curators green", hex: "#16a34a" },
   yellow: { label: "Curators yellow", hex: "#ca8a04" },
   orange: { label: "Curators grey", hex: "#6b7280" },
@@ -2922,7 +2922,7 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 
 function syncUI() {
   if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
-  if (state.orgGroup === "curators-orange") state.orgGroup = "curators-grey";
+  if (state.orgGroup === "curators-red") state.orgGroup = "curators-orange";
   if (
     __galaxyLayoutReset.theme !== state.theme ||
     __galaxyLayoutReset.orgGroup !== state.orgGroup ||
