@@ -1931,7 +1931,7 @@ __galaxyMotionMql.addEventListener?.("change", (e) => {
 });
 
 /** Shared canvas tokens — align with light page / cards (Geo Atlas UI). */
-const CANVAS_FONT_MEMBER_NAMES = '600 11px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+const CANVAS_FONT_MEMBER_NAMES = '600 12px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
 const CANVAS_FONT_MEMBER_PIN = '600 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
 const CANVAS_TEXT_MEMBER = "rgba(32, 28, 44, 0.94)";
 const CANVAS_TEXT_MEMBER_MUTED = "rgba(55, 50, 72, 0.78)";
@@ -2923,6 +2923,54 @@ function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
     }));
 }
 
+/** Cluster focus: name on a pill; avoids huge hover disk covering neighbors' labels. */
+function drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, canvasW, canvasH, hoverPeer) {
+  const rLayout = memberDisplayRadius(member, selected, hoveredId);
+  const rVis = member.entityId === hoveredId ? galaxyHoverAvatarRadius(rLayout) : rLayout;
+  const label = truncateGalaxyLabel(member.name, 24);
+
+  let placeAbove = member.entityId === hoveredId;
+  if (!placeAbove && hoverPeer) {
+    const hR = galaxyHoverAvatarRadius(memberDisplayRadius(hoverPeer, selected, hoveredId));
+    const d = Math.hypot(member.x - hoverPeer.x, member.y - hoverPeer.y);
+    if (d < hR + rVis + 14) placeAbove = true;
+  }
+  if (!placeAbove && member.y + rVis + 30 > canvasH - 8) placeAbove = true;
+  if (placeAbove && member.y - rVis - 30 < 8) placeAbove = false;
+
+  ctx.save();
+  ctx.font = CANVAS_FONT_MEMBER_NAMES;
+  const metrics = ctx.measureText(label);
+  const padX = 8;
+  const padY = 5;
+  const pillW = Math.min(metrics.width + padX * 2, canvasW - 12);
+  const pillH = 22;
+
+  const cx = member.x;
+  let left = cx - pillW / 2;
+  let topY = placeAbove ? member.y - rVis - 8 - pillH : member.y + rVis + 8;
+  left = Math.max(6, Math.min(left, canvasW - pillW - 6));
+  topY = Math.max(6, Math.min(topY, canvasH - pillH - 6));
+
+  ctx.shadowColor = "rgba(90, 70, 130, 0.14)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+  ctx.beginPath();
+  gfRoundRectPath(ctx, left, topY, pillW, pillH, 8);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(117, 99, 164, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? CANVAS_TEXT_MEMBER : CANVAS_TEXT_MEMBER_MUTED;
+  ctx.fillText(label, left + pillW / 2, topY + pillH / 2);
+  ctx.restore();
+}
+
 function drawFrame() {
   resizeCanvas();
   const { width, height, br: brSize } = readCanvasCssSize();
@@ -2975,42 +3023,57 @@ function drawFrame() {
   });
 
   if (isGalaxyClusterFocus()) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.font = CANVAS_FONT_MEMBER_NAMES;
-    list.forEach((member) => {
-      const radius = memberDisplayRadius(member, selected, hoveredId);
-      const rLabel =
-        member.entityId === hoveredId ? galaxyHoverAvatarRadius(radius) : radius;
-      const label = truncateGalaxyLabel(member.name, 22);
-      const tx = member.x;
-      const ty = member.y + rLabel + 4;
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
-      ctx.strokeText(label, tx, ty);
-      ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? CANVAS_TEXT_MEMBER : CANVAS_TEXT_MEMBER_MUTED;
-      ctx.fillText(label, tx, ty);
+    const hoverPeer = hoveredId ? list.find((m) => m.entityId === hoveredId) : null;
+    const namesDraw = [...list].sort((a, b) => {
+      if (a.entityId === hoveredId) return 1;
+      if (b.entityId === hoveredId) return -1;
+      return 0;
     });
-    ctx.restore();
+    namesDraw.forEach((member) => {
+      drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, width, height, hoverPeer);
+    });
   } else {
     const pin = list.find((m) => m.entityId === hoveredId) || selected;
     if (pin && (hoveredId || selected)) {
       const radius = memberDisplayRadius(pin, selected, hoveredId);
       const rLabel = pin.entityId === hoveredId ? galaxyHoverAvatarRadius(radius) : radius;
+      const name = String(pin.name || "").trim() || "—";
       ctx.save();
       ctx.font = CANVAS_FONT_MEMBER_PIN;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "bottom";
-      const px = pin.x + rLabel + 8;
-      const py = pin.y - rLabel - 4;
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.strokeText(pin.name, px, py);
-      ctx.fillStyle = CANVAS_TEXT_MEMBER;
-      ctx.fillText(pin.name, px, py);
+      if (pin.entityId === hoveredId) {
+        const tw = Math.min(ctx.measureText(name).width + 16, width - 12);
+        const th = 26;
+        let left = pin.x - tw / 2;
+        let top = pin.y - rLabel - 10 - th;
+        left = Math.max(6, Math.min(left, width - tw - 6));
+        top = Math.max(6, Math.min(top, height - th - 6));
+        ctx.shadowColor = "rgba(90, 70, 130, 0.14)";
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+        ctx.beginPath();
+        gfRoundRectPath(ctx, left, top, tw, th, 8);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(117, 99, 164, 0.22)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = CANVAS_TEXT_MEMBER;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(name, left + tw / 2, top + th / 2);
+      } else {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "bottom";
+        const px = pin.x + rLabel + 8;
+        const py = pin.y - rLabel - 4;
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.strokeText(name, px, py);
+        ctx.fillStyle = CANVAS_TEXT_MEMBER;
+        ctx.fillText(name, px, py);
+      }
       ctx.restore();
     }
   }
