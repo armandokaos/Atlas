@@ -245,7 +245,9 @@ function normalizeMemberSkills(raw) {
 const GALAXY_SKILL_OTHER = "__galaxy_other__";
 
 /** Rayon visuel unique des nœuds constellation (anneaux), identique pour tous les profils. */
-const GALAXY_MEMBER_DOT_RADIUS = 11;
+const GALAXY_MEMBER_DOT_RADIUS = 13;
+
+const GALAXY_AVATAR_PRELOAD_PER_FRAME = 6;
 
 /** Distinct hue per skill index (Skills galaxy); output is always `#rrggbb` for canvas alpha suffixes. */
 function galaxySkillHueToHex(index) {
@@ -522,26 +524,124 @@ function galaxyHexToRgb(hex) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
-/** Constellation nodes: soft filled disks for light UI; interaction = none|hover|selected */
-function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction) {
+/** URL → { status, img } for canvas drawImage (CORS-safe when gateway allows). */
+const __galaxyAvatarByUrl = new Map();
+
+function galaxyAvatarEnsureEntry(url) {
+  const u = String(url || "").trim();
+  if (!u) return null;
+  let e = __galaxyAvatarByUrl.get(u);
+  if (!e) {
+    e = { status: "idle" };
+    __galaxyAvatarByUrl.set(u, e);
+  }
+  return e;
+}
+
+function galaxyAvatarStartLoad(url) {
+  const u = String(url || "").trim();
+  if (!u) return;
+  const e = galaxyAvatarEnsureEntry(u);
+  if (!e || e.status !== "idle") return;
+  e.status = "loading";
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    if (e.status !== "loading") return;
+    if (!(img.naturalWidth > 0)) {
+      e.status = "error";
+      return;
+    }
+    e.img = img;
+    e.status = "ready";
+  };
+  img.onerror = () => {
+    e.status = "error";
+    e.img = undefined;
+  };
+  img.src = u;
+}
+
+function galaxyAvatarDrainPreload(members) {
+  const cap = GALAXY_AVATAR_PRELOAD_PER_FRAME;
+  let started = 0;
+  const seen = new Set();
+  for (const m of members) {
+    if (started >= cap) break;
+    const u = String(m?.avatarUrl || "").trim();
+    if (!u || seen.has(u)) continue;
+    seen.add(u);
+    const e = galaxyAvatarEnsureEntry(u);
+    if (e && e.status === "idle") {
+      galaxyAvatarStartLoad(u);
+      started += 1;
+    }
+  }
+}
+
+function galaxyAvatarReadyImg(url) {
+  const u = String(url || "").trim();
+  if (!u) return null;
+  const e = __galaxyAvatarByUrl.get(u);
+  if (!e || e.status !== "ready" || !e.img) return null;
+  const img = e.img;
+  if (!img.complete || !(img.naturalWidth > 0)) return null;
+  return img;
+}
+
+/** object-fit: cover inside a circle (own save/restore). */
+function drawGalaxyAvatarCoverInCircle(ctx, img, cx, cy, rad) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+  const scale = Math.max((rad * 2) / iw, (rad * 2) / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  const dx = cx - dw / 2;
+  const dy = cy - dh / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.restore();
+}
+
+function drawConstellationMemberGradientDisk(ctx, x, y, rad, baseHex) {
   const hex = String(baseHex || "#94A3B8");
   const { r, g, b } = galaxyHexToRgb(hex);
-  const sel = interaction === "selected";
-  const hov = interaction === "hover";
-  const scale = sel ? 1.06 : hov ? 1.035 : 1;
-  const rad = radius * scale;
   const ix = x - rad * 0.32;
   const iy = y - rad * 0.32;
   const gFill = ctx.createRadialGradient(ix, iy, rad * 0.08, x, y, rad);
   gFill.addColorStop(0, `rgba(${Math.min(255, r + 42)}, ${Math.min(255, g + 38)}, ${Math.min(255, b + 55)}, 0.92)`);
   gFill.addColorStop(0.65, `rgba(${r},${g},${b},0.88)`);
   gFill.addColorStop(1, `rgba(${Math.max(0, r - 22)}, ${Math.max(0, g - 22)}, ${Math.max(0, b - 18)}, 0.86)`);
-
-  ctx.save();
   ctx.beginPath();
   ctx.arc(x, y, rad, 0, Math.PI * 2);
   ctx.fillStyle = gFill;
   ctx.fill();
+}
+
+/** Constellation nodes: avatar (when loaded) + rings; interaction = none|hover|selected */
+function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, avatarUrl) {
+  const hex = String(baseHex || "#94A3B8");
+  const { r, g, b } = galaxyHexToRgb(hex);
+  const sel = interaction === "selected";
+  const hov = interaction === "hover";
+  const scale = sel ? 1.06 : hov ? 1.035 : 1;
+  const rad = radius * scale;
+  const img = galaxyAvatarReadyImg(avatarUrl);
+
+  ctx.save();
+  if (img) {
+    try {
+      drawGalaxyAvatarCoverInCircle(ctx, img, x, y, rad);
+    } catch {
+      drawConstellationMemberGradientDisk(ctx, x, y, rad, hex);
+    }
+  } else {
+    drawConstellationMemberGradientDisk(ctx, x, y, rad, hex);
+  }
 
   ctx.beginPath();
   ctx.arc(x, y, rad * 0.9, -0.35, -0.35 + 1.0);
@@ -980,6 +1080,7 @@ function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   const totalH = lines.length * lineHeight;
   const yStart = hy - totalH / 2 + lineHeight * 0.72;
   const pop = 0.97 + 0.03 * Math.min(1, Math.max(0, labelPop));
+  const onAvatar = Boolean(galaxyAvatarReadyImg(String(member?.avatarUrl || "").trim()));
   ctx.save();
   ctx.globalAlpha = labelAlpha;
   ctx.translate(hx, hy);
@@ -989,6 +1090,10 @@ function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   ctx.textBaseline = "middle";
   ctx.font = `500 ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
   ctx.fillStyle = "rgba(32, 28, 44, 0.9)";
+  if (onAvatar) {
+    ctx.shadowColor = "rgba(255, 255, 255, 0.92)";
+    ctx.shadowBlur = 5;
+  }
   lines.forEach((line, i) => {
     const ly = yStart + i * lineHeight;
     ctx.fillText(line, hx, ly);
@@ -998,11 +1103,24 @@ function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
 
 function gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   const hubC = member.color || "#7447f5";
+  const url = String(member?.avatarUrl || "").trim();
+  const img = galaxyAvatarReadyImg(url);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
+  if (img) {
+    try {
+      drawGalaxyAvatarCoverInCircle(ctx, img, hx, hy, hubR);
+    } catch {
+      ctx.beginPath();
+      ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+    }
+  } else {
+    ctx.beginPath();
+    ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+  }
   ctx.beginPath();
   ctx.arc(hx, hy, hubR - 3.5, 0, Math.PI * 2);
   ctx.strokeStyle = hubC;
@@ -1097,6 +1215,9 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     return;
   }
 
+  galaxyAvatarDrainPreload(list);
+  galaxyAvatarDrainPreload([member]);
+
   const bgDots = gfBackgroundDotsExcludingFocus(list, member.entityId, selected, hoveredId);
 
   gfDrawFocusBackdrop(ctx, width, height);
@@ -1121,7 +1242,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.85;
     bgDots.forEach((d) => {
-      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none");
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none", d.avatarUrl);
     });
     ctx.restore();
 
@@ -1141,7 +1262,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = 0.14;
     bgDots.forEach((d) => {
-      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none");
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none", d.avatarUrl);
     });
     ctx.restore();
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
@@ -1163,7 +1284,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.save();
     ctx.globalAlpha = fadeLand * 0.82;
     bgDots.forEach((d) => {
-      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none");
+      drawConstellationMemberRing(ctx, d.x, d.y, d.r, d.base, "none", d.avatarUrl);
     });
     ctx.restore();
 
@@ -2495,6 +2616,7 @@ function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
       y: m.y,
       base: galaxyMemberBaseColor(m),
       r: memberDisplayRadius(m, selected, hoveredId),
+      avatarUrl: m.avatarUrl || "",
     }));
 }
 
@@ -2528,10 +2650,20 @@ function drawFrame() {
 
   stepMemberLayoutPhysics(list, width, height, now, null);
 
+  galaxyAvatarDrainPreload(list);
+
   list.forEach((member) => {
     const interaction = memberRingInteraction(member, selected, hoveredId);
     const radius = memberDisplayRadius(member, selected, hoveredId);
-    drawConstellationMemberRing(ctx, member.x, member.y, radius, galaxyMemberBaseColor(member), interaction);
+    drawConstellationMemberRing(
+      ctx,
+      member.x,
+      member.y,
+      radius,
+      galaxyMemberBaseColor(member),
+      interaction,
+      member.avatarUrl || "",
+    );
   });
 
   if (isGalaxyClusterFocus()) {
