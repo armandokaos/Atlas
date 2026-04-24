@@ -382,7 +382,8 @@ h1 {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  box-shadow: 0 0 14px currentColor;
+  flex-shrink: 0;
+  box-shadow: 0 0 14px currentColor, 0 0 0 1px rgba(15, 23, 42, 0.16) inset;
 }
 
 .theme-pill-count {
@@ -397,6 +398,16 @@ h1 {
 }
 
 .theme-pill--compact .theme-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.theme-dot--detail {
+  width: 9px;
+  height: 9px;
+}
+
+.theme-dot--roster {
   width: 8px;
   height: 8px;
 }
@@ -1308,8 +1319,15 @@ h1 {
 }
 
 .roster-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 700;
   color: var(--text);
+}
+
+.roster-team-label {
+  font-weight: 700;
 }
 
 .roster-theme-split {
@@ -1335,6 +1353,19 @@ h1 {
   font-size: 0.68rem;
   margin-right: 8px;
   color: #b168ff;
+}
+
+.detail-org-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  vertical-align: middle;
+}
+
+.detail-org-name {
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
 }
 
 .roster-theme {

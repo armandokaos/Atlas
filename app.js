@@ -54,7 +54,7 @@ const ORG_GROUP_RAW_SPECS = [
   { key: "curators-green", label: "Curators green", names: [] },
   { key: "curators-red", label: "Curators Red", names: [] },
   { key: "curators-yellow", label: "Curators yellow", names: [] },
-  { key: "curators-orange", label: "Curators orange", names: [] },
+  { key: "curators-grey", label: "Curators grey", names: [] },
 ];
 
 const ORG_GROUP_SPECS = ORG_GROUP_RAW_SPECS.map((row) => ({
@@ -77,7 +77,7 @@ const ORG_GROUP_PILL_ORDER = [
   "curators-green",
   "curators-red",
   "curators-yellow",
-  "curators-orange",
+  "curators-grey",
   /** Default bucket: not in named geo teams and no badge mapped to a curator color (incl. blue/purple/black tags). */
   "curators",
 ];
@@ -90,7 +90,7 @@ const ORG_GROUP_DOT_COLORS = {
   "curators-green": "#16a34a",
   "curators-red": "#dc2626",
   "curators-yellow": "#ca8a04",
-  "curators-orange": "#ea580c",
+  "curators-grey": "#6b7280",
   curators: "#64748b",
 };
 
@@ -99,7 +99,7 @@ const BADGE_TO_ORG_GROUP = {
   red: "curators-red",
   yellow: "curators-yellow",
   pink: "curators-elite",
-  orange: "curators-orange",
+  orange: "curators-grey",
 };
 
 function resolveOrgGroupKey(displayName) {
@@ -471,6 +471,10 @@ function memberOrgGroupLabel(member) {
   return ORG_GROUP_LABEL_BY_KEY[memberOrgGroupKey(member)] || "Curators";
 }
 
+function memberOrgGroupDotColor(member) {
+  return ORG_GROUP_DOT_COLORS[memberOrgGroupKey(member)] || "#64748b";
+}
+
 function memberIsHiddenByTag(member) {
   return String(personalMarks.badges?.[member.entityId] || "")
     .trim()
@@ -661,8 +665,10 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   const { r, g, b } = galaxyHexToRgb(hex);
   const sel = interaction === "selected";
   const hov = interaction === "hover";
-  const scale = sel ? 1.06 : hov ? 1.035 : 1;
-  const rad = radius * scale;
+  const baseR = Number(radius) || 8;
+  const hoverBoost = baseR < 12 ? 1.15 : baseR < 18 ? 1.09 : 1.035;
+  const scale = sel ? 1.06 : hov ? hoverBoost : 1;
+  const rad = baseR * scale;
   const img = galaxyAvatarReadyImg(avatarUrl);
 
   ctx.save();
@@ -1341,7 +1347,7 @@ const BADGE_META = {
   red: { label: "Curators Red", hex: "#dc2626" },
   green: { label: "Curators green", hex: "#16a34a" },
   yellow: { label: "Curators yellow", hex: "#ca8a04" },
-  orange: { label: "Curators orange", hex: "#ea580c" },
+  orange: { label: "Curators grey", hex: "#6b7280" },
   black: { label: "Hidden", hex: "#171717" },
 };
 
@@ -1916,14 +1922,52 @@ function relativeDensity(member) {
   return "light profile";
 }
 
+/** Lowercase + strip combining marks for accent-insensitive search (best-effort). */
+function normalizeForSearch(value) {
+  const s = String(value ?? "").toLowerCase();
+  try {
+    return s.normalize("NFD").replace(/\p{M}/gu, "");
+  } catch {
+    return s;
+  }
+}
+
+function buildMemberSearchHaystack(member) {
+  const skillsHay = memberSkillsList(member).join(" ");
+  const sl = member.socialLinks || {};
+  const urls = [sl.x, sl.github, sl.linkedin, ...(member.spaces || [])].filter(Boolean).join(" ");
+  const orgKey = memberOrgGroupKey(member);
+  const raw = [
+    member.name,
+    member.description,
+    member.theme,
+    memberOrgGroupLabel(member),
+    orgKey,
+    skillsHay,
+    member.entityId,
+    member.skillClusterLabel,
+    urls,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return normalizeForSearch(raw);
+}
+
+function searchQueryMatchesHaystack(normHaystack, rawQuery) {
+  const q = String(rawQuery ?? "").trim();
+  if (!q) return true;
+  const normQ = normalizeForSearch(q);
+  const tokens = normQ.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  return tokens.every((tok) => normHaystack.includes(tok));
+}
+
 /** Theme + team + search (used for skill-pill counts so they never drop to 0 just because a skill filter is active). */
 function memberMatchesGalaxyRollupFilters(member) {
-  const query = state.query.trim().toLowerCase();
   const matchTheme = state.theme === "all" || member.theme === state.theme;
   const matchOrg = state.orgGroup === "all" || memberOrgGroupKey(member) === state.orgGroup;
-  const skillsHay = memberSkillsList(member).join(" ");
-  const haystack = `${member.name} ${member.description} ${member.theme} ${memberOrgGroupLabel(member)} ${skillsHay}`.toLowerCase();
-  const matchQuery = !query || haystack.includes(query);
+  const haystack = buildMemberSearchHaystack(member);
+  const matchQuery = searchQueryMatchesHaystack(haystack, state.query);
   return matchTheme && matchOrg && matchQuery;
 }
 
@@ -2066,9 +2110,9 @@ function renderSpotlightFilters(list) {
     .join("");
 }
 
-function renderThemePillsInto(container, compact) {
+function renderThemePillsInto(container, compact, countSource) {
   if (!container) return;
-  const source = uiMembers();
+  const source = countSource ?? activeMembers();
   const counts = source.reduce((acc, member) => {
     acc[member.theme] = (acc[member.theme] || 0) + 1;
     return acc;
@@ -2107,10 +2151,10 @@ function renderThemePillsInto(container, compact) {
     .join("");
 }
 
-function renderOrgGroupPillsInto(container, compact) {
+function renderOrgGroupPillsInto(container, compact, countSource) {
   if (!container) return;
   const counts = new Map();
-  const source = uiMembers();
+  const source = countSource ?? activeMembers();
   source.forEach((m) => {
     const key = memberOrgGroupKey(m);
     counts.set(key, (counts.get(key) || 0) + 1);
@@ -2144,25 +2188,22 @@ function renderOrgGroupPillsInto(container, compact) {
     .join("");
 }
 
-function buildOrgGroupPills() {
-  renderOrgGroupPillsInto(spotlightOrgStrip, true);
-}
-
 /** Category / Team pill rows under the constellation tabs (same filters as Spotlight). */
 function renderGalaxyCategoryTeamToolbars() {
   const catBar = document.querySelector("#galaxy-category-toolbar");
   const teamBar = document.querySelector("#galaxy-team-toolbar");
   if (!catBar || !teamBar || !galaxyThemePills || !galaxyOrgPills) return;
   const mode = state.galaxyViewMode;
+  const src = activeMembers();
   catBar.hidden = mode !== "category";
   teamBar.hidden = mode !== "team";
   if (mode === "category") {
-    renderThemePillsInto(galaxyThemePills, true);
+    renderThemePillsInto(galaxyThemePills, true, src);
   } else {
     galaxyThemePills.innerHTML = "";
   }
   if (mode === "team") {
-    renderOrgGroupPillsInto(galaxyOrgPills, true);
+    renderOrgGroupPillsInto(galaxyOrgPills, true, src);
   } else {
     galaxyOrgPills.innerHTML = "";
   }
@@ -2267,8 +2308,9 @@ function renderGalaxyViewChrome() {
 }
 
 function buildThemePills() {
-  renderThemePillsInto(spotlightThemeStrip, true);
-  buildOrgGroupPills();
+  const src = activeMembers();
+  renderThemePillsInto(spotlightThemeStrip, true, src);
+  renderOrgGroupPillsInto(spotlightOrgStrip, true, src);
   renderGalaxyViewChrome();
 }
 
@@ -2396,7 +2438,7 @@ function renderDetail(member) {
             <span>${escapeHtml(member.theme)}</span>
           </div>
           <h2 class="detail-name">${escapeHtml(member.name)}</h2>
-          <p class="detail-org"><span class="detail-org-label">Team</span>${escapeHtml(memberOrgGroupLabel(member))}</p>
+          <p class="detail-org" aria-label="Team: ${escapeHtml(memberOrgGroupLabel(member))}"><span class="detail-org-label">Team</span><span class="detail-org-pill"><span class="theme-dot theme-dot--detail" style="color:${memberOrgGroupDotColor(member)};background:${memberOrgGroupDotColor(member)};"></span><span class="detail-org-name">${escapeHtml(memberOrgGroupLabel(member))}</span></span></p>
           <p class="detail-description">${member.description ? escapeHtml(member.description) : ""}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
@@ -2440,7 +2482,7 @@ function renderRoster(list) {
             <div>
               <p class="roster-name">${escapeHtml(member.name)}</p>
               <p class="roster-theme">
-                <span class="roster-team">${escapeHtml(memberOrgGroupLabel(member))}</span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
+                <span class="roster-team"><span class="theme-dot theme-dot--roster" style="color:${memberOrgGroupDotColor(member)};background:${memberOrgGroupDotColor(member)};"></span><span class="roster-team-label">${escapeHtml(memberOrgGroupLabel(member))}</span></span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
               </p>
             </div>
             <div class="roster-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
@@ -2478,10 +2520,23 @@ function renderRoster(list) {
   `;
 }
 
+/** Shared layout / animation knobs for galaxy member physics and phase. */
+const GALAXY_MOTION = {
+  layoutPull: 0.016,
+  layoutDamp: 0.9,
+  angleDriftPerMs: 0.000035,
+  wobbleAmp: 2.2,
+  wobbleSinK: 0.00022,
+  wobbleCosK: 0.0002,
+  diskSpinPhaseFactor: 0.06,
+  phaseIncrement: 0.0009,
+};
+
 /** Demi-axes du disque Vogel (un seul thème) : marge pour grosses pastilles + labels. */
 function galaxySingleDiskHalfExtents(width, height) {
   const dotR = galaxyMemberDotRadiusPx(__galaxyVisibleCountForRadius);
-  const edge = 40 + dotR * 2.4;
+  const edgeBoost = dotR > 18 ? Math.min(56, (dotR - 18) * 1.15) : 0;
+  const edge = 40 + dotR * 2.4 + edgeBoost;
   return {
     diskHalfW: Math.max(96, width * 0.47 - edge),
     diskHalfH: Math.max(92, height * 0.43 - edge),
@@ -2583,13 +2638,26 @@ function snapSingleThemeVogelPositions(list) {
     const idx = index + 1;
     const golden = idx * 2.39996322972865332;
     const normR = Math.sqrt(idx / (n + 1.12));
-    const spin = state.phase * 0.06;
+    const spin = state.phase * GALAXY_MOTION.diskSpinPhaseFactor;
     const t = golden + spin;
     member.x = anchor.x + Math.cos(t) * normR * diskHalfW;
     member.y = anchor.y + Math.sin(t) * normR * diskHalfH;
     member.vx = 0;
     member.vy = 0;
   });
+  clampGalaxyMemberCanvasBounds(list, width, height);
+}
+
+function clampGalaxyMemberCanvasBounds(list, width, height) {
+  if (!list.length) return;
+  const r0 = galaxyMemberDotRadiusPx(__galaxyVisibleCountForRadius);
+  const rExt = r0 * 1.08 + 10;
+  const bottomExtra = isGalaxyClusterFocus() ? 28 : 14;
+  const topExtra = 8;
+  for (const member of list) {
+    member.x = Math.min(width - rExt, Math.max(rExt, member.x));
+    member.y = Math.min(height - rExt - bottomExtra, Math.max(rExt + topExtra, member.y));
+  }
 }
 
 /** Même physique que le paysage ; `freezeEntityId` fige un membre (focus perso) pour ne pas bouger son point de sortie. */
@@ -2600,9 +2668,11 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
   const orbitScale = galaxyOrbitScale();
   const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
   const { diskHalfW, diskHalfH } = diskExtents;
-  const layoutPull = 0.016;
-  const layoutDamp = 0.9;
-  const angleDrift = canvasReducedMotion() ? 0 : now * 0.000035;
+  const { layoutPull, layoutDamp, angleDriftPerMs, wobbleAmp, wobbleSinK, wobbleCosK, diskSpinPhaseFactor } =
+    GALAXY_MOTION;
+  const angleDrift = canvasReducedMotion() ? 0 : now * angleDriftPerMs;
+  const dotR = galaxyMemberDotRadiusPx(__galaxyVisibleCountForRadius);
+  const orbitRadiusBoost = dotR > 16 ? 1 + Math.min(0.45, (dotR - 16) * 0.024) : 1;
 
   list.forEach((member, index) => {
     if (freezeEntityId && member.entityId === freezeEntityId) return;
@@ -2616,16 +2686,17 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
       const idx = index + 1;
       const golden = idx * 2.39996322972865332;
       const normR = Math.sqrt(idx / (n + 1.12));
-      const wobbleAmp = canvasReducedMotion() ? 0 : 1;
-      const wobbleX = Math.sin(now * 0.00022 + member.seed * 3.9) * 2.2 * wobbleAmp;
-      const wobbleY = Math.cos(now * 0.0002 + member.seed * 2.7) * 2.2 * wobbleAmp;
-      const spin = state.phase * 0.06;
+      const wobbleMul = canvasReducedMotion() ? 0 : 1;
+      const wobbleX = Math.sin(now * wobbleSinK + member.seed * 3.9) * wobbleAmp * wobbleMul;
+      const wobbleY = Math.cos(now * wobbleCosK + member.seed * 2.7) * wobbleAmp * wobbleMul;
+      const spin = state.phase * diskSpinPhaseFactor;
       const t = golden + spin;
       targetX = anchor.x + Math.cos(t) * normR * diskHalfW + wobbleX;
       targetY = anchor.y + Math.sin(t) * normR * diskHalfH + wobbleY;
     } else {
       const viewScale = Math.min(1.72, Math.min(width, height) / 500);
-      const orbit = (50 + (index % 12) * 20 + member.spaceCount * 9) * orbitScale * viewScale;
+      const orbit =
+        (50 + (index % 12) * 20 + member.spaceCount * 9) * orbitScale * viewScale * orbitRadiusBoost;
       targetX = anchor.x + Math.cos(angle) * orbit;
       targetY = anchor.y + Math.sin(angle * 1.15) * (orbit * 0.74);
     }
@@ -2639,6 +2710,7 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
     member.x = curX + member.vx;
     member.y = curY + member.vy;
   });
+  clampGalaxyMemberCanvasBounds(list, width, height);
 }
 
 function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
@@ -2667,7 +2739,7 @@ function drawFrame() {
       const selected = selectedMember(list);
       const hoveredId = state.hoveredId;
       stepMemberLayoutPhysics(list, width, height, now, galaxyFocus.memberId);
-      state.phase += 0.0009;
+      state.phase += GALAXY_MOTION.phaseIncrement;
       ctx.clearRect(0, 0, width, height);
       drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId);
       requestAnimationFrame(drawFrame);
@@ -2737,7 +2809,7 @@ function drawFrame() {
     }
   }
 
-  state.phase += 0.0009;
+  state.phase += GALAXY_MOTION.phaseIncrement;
   requestAnimationFrame(drawFrame);
 }
 
@@ -2786,6 +2858,7 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 
 function syncUI() {
   if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
+  if (state.orgGroup === "curators-orange") state.orgGroup = "curators-grey";
   if (
     __galaxyLayoutReset.theme !== state.theme ||
     __galaxyLayoutReset.orgGroup !== state.orgGroup ||
