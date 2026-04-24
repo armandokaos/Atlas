@@ -10,7 +10,8 @@ const palette = {
   Generalists: "#94A3B8",
 };
 
-const BOSS_NAME = "Yaniv Tal";
+/** Founder roster/canvas highlight; must match a loaded `member.name`, or `""` when absent from `members-data`. */
+const BOSS_NAME = "";
 const BOSS_COLOR = "#FFD84D";
 
 const ROSTER_PAGE_SIZE = 12;
@@ -329,7 +330,7 @@ const members = membersSourceFiltered.map((member, index) => {
     if (bestKey !== null) skillClusterKey = bestKey;
   }
   return {
-    isBoss: member.name === BOSS_NAME,
+    isBoss: Boolean(BOSS_NAME) && member.name === BOSS_NAME,
     ...member,
     spaces,
     spaceCount,
@@ -343,7 +344,7 @@ const members = membersSourceFiltered.map((member, index) => {
       github: normalizeGithubUrl(member.socialLinks?.github || ""),
       linkedin: normalizeLinkedinUrl(member.socialLinks?.linkedin || ""),
     },
-    color: member.name === BOSS_NAME ? BOSS_COLOR : palette[member.theme] || member.color || "#94A3B8",
+    color: Boolean(BOSS_NAME) && member.name === BOSS_NAME ? BOSS_COLOR : palette[member.theme] || member.color || "#94A3B8",
     x: 0,
     y: 0,
     vx: 0,
