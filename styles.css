@@ -1357,6 +1357,7 @@ h1 {
 
 .detail-org-pill {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   vertical-align: middle;

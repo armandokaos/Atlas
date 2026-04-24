@@ -31,19 +31,42 @@ const ROSTER_PAGE1_PIN_ORDER = [
 ];
 
 /**
- * Org / team buckets (first matching row wins). Names must match `member.name` in `members-data`.
- * Edit `names` for green / red / yellow lists when you assign people. "Walaa" → primary dev account `Walaa01` in data.
+ * Org / team buckets. A person may appear in several `names` arrays (same `member.name` string); all apply.
+ * Names must match `member.name` in `members-data`.
  */
 const ORG_GROUP_RAW_SPECS = [
   {
     key: "geo-core",
     label: "Geo core team",
-    names: ["Yaniv Tal", "Preston Mantel", "Nate", "Nik", "Adam Fischer", "Hugues de Braucourt", "Byron"],
+    names: [
+      "Yaniv Tal",
+      "Preston Mantel",
+      "Nate",
+      "Nik",
+      "Adam Fischer",
+      "Hugues de Braucourt",
+      "Byron",
+      "Matt Haynes",
+      "Jagger",
+      "Arturas Vil",
+    ],
   },
   {
     key: "geo-content",
     label: "Geo content team",
-    names: ["Bertrand Armando", "CptMoh", "Vytautas", "Hashir", "Rushab Taneja", "Ahmed Abdelmalek", "Dan Cordie"],
+    names: [
+      "Bertrand Armando",
+      "CptMoh",
+      "Vytautas",
+      "Hashir",
+      "Rushab Taneja",
+      "Ahmed Abdelmalek",
+      "Dan Cordie",
+      "Mantas Siukstas",
+      "Catalin",
+      "Dovile Sv",
+      "Arturas Vil",
+    ],
   },
   { key: "geo-dev", label: "Geo core devs", names: ["Walaa01", "Rex"] },
   {
@@ -102,12 +125,30 @@ const BADGE_TO_ORG_GROUP = {
   orange: "curators-grey",
 };
 
-function resolveOrgGroupKey(displayName) {
+/** All org keys whose `names` list contains this display name (may be multiple). */
+function resolveOrgGroupKeys(displayName) {
   const n = String(displayName || "").trim().toLowerCase();
+  const keys = [];
   for (const spec of ORG_GROUP_SPECS) {
-    if (spec.names.has(n)) return spec.key;
+    if (spec.names.has(n)) keys.push(spec.key);
   }
-  return "curators";
+  return keys;
+}
+
+function blendHex2(hexA, hexB, t = 0.5) {
+  const parse = (hex) => {
+    const raw = String(hex || "#94A3B8").replace(/^#/, "");
+    if (!/^[0-9a-f]{6}$/i.test(raw)) return { r: 148, g: 163, b: 184 };
+    const n = parseInt(raw, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  };
+  const a = parse(hexA);
+  const b = parse(hexB);
+  const m = (x, y) => Math.round(x + (y - x) * t);
+  const r = m(a.r, b.r);
+  const g = m(a.g, b.g);
+  const bl = m(a.b, b.b);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
 }
 
 const data = window.GEO_CURATORS_DATA;
@@ -345,7 +386,8 @@ function galaxySkillHex(skillKey) {
 const members = membersSourceFiltered.map((member, index) => {
   const spaces = (member.spaces || []).map(normalizeSpaceUrl).filter(Boolean);
   const spaceCount = spaces.length;
-  const orgGroup = resolveOrgGroupKey(member.name);
+  const orgGroupKeysFromNames = resolveOrgGroupKeys(member.name);
+  const orgGroup = orgGroupKeysFromNames.length ? orgGroupKeysFromNames[0] : "curators";
   const skills = normalizeMemberSkills(member.skills);
   let skillClusterKey = GALAXY_SKILL_OTHER;
   if (GALAXY_TOP_SKILL_KEYS.length) {
@@ -367,8 +409,8 @@ const members = membersSourceFiltered.map((member, index) => {
     ...member,
     spaces,
     spaceCount,
+    orgGroupKeysFromNames,
     orgGroup,
-    orgGroupLabel: ORG_GROUP_LABEL_BY_KEY[orgGroup] || "Curators",
     skills,
     skillClusterKey,
     skillClusterLabel: GALAXY_SKILL_LABEL_BY_KEY.get(skillClusterKey) || "Other skills",
@@ -459,20 +501,57 @@ const state = {
   phase: 0,
 };
 
-function memberOrgGroupKey(member) {
-  // Explicit team mapping from member name wins over badge-based curator buckets.
-  if (member.orgGroup && member.orgGroup !== "curators") return member.orgGroup;
+/** Org keys from name lists only (stored on each member at init). */
+function memberOrgGroupKeysFromNames(member) {
+  const raw = member?.orgGroupKeysFromNames;
+  return Array.isArray(raw) && raw.length ? [...raw] : [];
+}
+
+/** Effective org keys: name lists for geo teams win; otherwise personal badge → curator bucket. */
+function memberOrgGroupKeys(member) {
+  const fromNames = memberOrgGroupKeysFromNames(member);
+  const hasExplicitGeo = fromNames.some((k) => k === "geo-core" || k === "geo-content" || k === "geo-dev");
+  if (hasExplicitGeo) return [...new Set(fromNames)];
   const fromBadge = BADGE_TO_ORG_GROUP[getPersonalBadge(member.entityId)];
-  if (fromBadge) return fromBadge;
-  return member.orgGroup || "curators";
+  if (fromBadge) return [fromBadge];
+  if (fromNames.length) return [...new Set(fromNames)];
+  return ["curators"];
+}
+
+function memberBelongsToOrgGroup(member, orgKey) {
+  if (orgKey === "all") return true;
+  return memberOrgGroupKeys(member).includes(orgKey);
+}
+
+/** Galaxy cluster id in team mode (composite when a person belongs to several teams). */
+function memberTeamGalaxyClusterKey(member) {
+  return [...memberOrgGroupKeys(member)].sort().join("|");
+}
+
+function galaxyTeamColorsForMember(member) {
+  return memberOrgGroupKeys(member).map((k) => ORG_GROUP_DOT_COLORS[k] || "#64748b");
 }
 
 function memberOrgGroupLabel(member) {
-  return ORG_GROUP_LABEL_BY_KEY[memberOrgGroupKey(member)] || "Curators";
+  const keys = memberOrgGroupKeys(member);
+  const labels = keys.map((k) => ORG_GROUP_LABEL_BY_KEY[k] || k).filter(Boolean);
+  if (!labels.length) return "Curators";
+  if (labels.length === 1) return labels[0];
+  return labels.join(" · ");
 }
 
 function memberOrgGroupDotColor(member) {
-  return ORG_GROUP_DOT_COLORS[memberOrgGroupKey(member)] || "#64748b";
+  const cols = galaxyTeamColorsForMember(member);
+  if (!cols.length) return "#64748b";
+  if (cols.length === 1) return cols[0];
+  return blendHex2(cols[0], cols[1], 0.5);
+}
+
+function renderMemberOrgDotsHtml(member, sizeClass) {
+  const cols = galaxyTeamColorsForMember(member);
+  const cls = sizeClass ? `theme-dot ${sizeClass}` : "theme-dot";
+  if (!cols.length) return `<span class="${cls}" style="color:#64748b;background:#64748b;"></span>`;
+  return cols.map((c) => `<span class="${cls}" style="color:${c};background:${c};"></span>`).join("");
 }
 
 function memberIsHiddenByTag(member) {
@@ -486,7 +565,10 @@ function uiMembers() {
 }
 
 function getGalaxyClusterKey(member) {
-  if (state.galaxyViewMode === "team") return memberOrgGroupKey(member);
+  if (state.galaxyViewMode === "team") {
+    if (state.orgGroup !== "all") return state.orgGroup;
+    return memberTeamGalaxyClusterKey(member);
+  }
   if (state.galaxyViewMode === "skills") {
     if (state.skillGalaxy !== "all") return state.skillGalaxy;
     return member.skillClusterKey;
@@ -509,9 +591,15 @@ function sortedGalaxyClusterKeys(keys) {
   }
   if (state.galaxyViewMode === "team") {
     return [...uniq].sort((a, b) => {
-      const ia = ORG_GROUP_PILL_ORDER.indexOf(a);
-      const ib = ORG_GROUP_PILL_ORDER.indexOf(b);
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      const rank = (k) => {
+        if (k.includes("|")) return 900 + k.length * 0.001;
+        const i = ORG_GROUP_PILL_ORDER.indexOf(k);
+        return i === -1 ? 998 : i;
+      };
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      return String(a).localeCompare(String(b));
     });
   }
   return [...uniq].sort((a, b) => String(a).localeCompare(String(b)));
@@ -519,13 +607,29 @@ function sortedGalaxyClusterKeys(keys) {
 
 function getGalaxyClusterColor(key) {
   if (state.galaxyViewMode === "category") return palette[key] || "#94A3B8";
-  if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[key] || "#94A3B8";
+  if (state.galaxyViewMode === "team") {
+    if (String(key).includes("|")) {
+      const parts = String(key).split("|").filter(Boolean);
+      const hexes = parts.map((p) => ORG_GROUP_DOT_COLORS[p]).filter(Boolean);
+      if (hexes.length >= 2) return blendHex2(hexes[0], hexes[1], 0.5);
+      return hexes[0] || "#94A3B8";
+    }
+    return ORG_GROUP_DOT_COLORS[key] || "#94A3B8";
+  }
   return galaxySkillHex(key);
 }
 
 function getGalaxyClusterLabel(key) {
   if (state.galaxyViewMode === "category") return String(key);
-  if (state.galaxyViewMode === "team") return ORG_GROUP_LABEL_BY_KEY[key] || String(key);
+  if (state.galaxyViewMode === "team") {
+    if (String(key).includes("|")) {
+      return String(key)
+        .split("|")
+        .map((p) => ORG_GROUP_LABEL_BY_KEY[p] || p)
+        .join(" + ");
+    }
+    return ORG_GROUP_LABEL_BY_KEY[key] || String(key);
+  }
   return GALAXY_SKILL_LABEL_BY_KEY.get(key) || String(key);
 }
 
@@ -538,7 +642,7 @@ function isGalaxyClusterFocus() {
 function memberIsGalaxyClusterFocused(member) {
   if (!isGalaxyClusterFocus()) return false;
   if (state.galaxyViewMode === "category") return member.theme === state.theme;
-  if (state.galaxyViewMode === "team") return memberOrgGroupKey(member) === state.orgGroup;
+  if (state.galaxyViewMode === "team") return memberBelongsToOrgGroup(member, state.orgGroup);
   return memberMatchesSkillGalaxyFilter(member);
 }
 
@@ -550,7 +654,11 @@ function galaxyMemberBaseColor(member) {
     if (state.skillGalaxy !== "all") return galaxySkillHex(state.skillGalaxy);
     return galaxySkillHex(member.skillClusterKey);
   }
-  if (state.galaxyViewMode === "team") return ORG_GROUP_DOT_COLORS[memberOrgGroupKey(member)] || "#94A3B8";
+  if (state.galaxyViewMode === "team") {
+    const cols = galaxyTeamColorsForMember(member);
+    if (cols.length >= 2) return blendHex2(cols[0], cols[1], 0.5);
+    return cols[0] || "#94A3B8";
+  }
   return member.color;
 }
 
@@ -1938,13 +2046,13 @@ function buildMemberSearchHaystack(member) {
   const skillsHay = memberSkillsList(member).join(" ");
   const sl = member.socialLinks || {};
   const urls = [sl.x, sl.github, sl.linkedin, ...(member.spaces || [])].filter(Boolean).join(" ");
-  const orgKey = memberOrgGroupKey(member);
+  const orgKeysHay = memberOrgGroupKeys(member).join(" ");
   const raw = [
     member.name,
     member.description,
     member.theme,
     memberOrgGroupLabel(member),
-    orgKey,
+    orgKeysHay,
     skillsHay,
     member.entityId,
     member.skillClusterLabel,
@@ -1967,7 +2075,7 @@ function searchQueryMatchesHaystack(normHaystack, rawQuery) {
 /** Theme + team + search (used for skill-pill counts so they never drop to 0 just because a skill filter is active). */
 function memberMatchesGalaxyRollupFilters(member) {
   const matchTheme = state.theme === "all" || member.theme === state.theme;
-  const matchOrg = state.orgGroup === "all" || memberOrgGroupKey(member) === state.orgGroup;
+  const matchOrg = memberBelongsToOrgGroup(member, state.orgGroup);
   const haystack = buildMemberSearchHaystack(member);
   const matchQuery = searchQueryMatchesHaystack(haystack, state.query);
   return matchTheme && matchOrg && matchQuery;
@@ -2158,8 +2266,9 @@ function renderOrgGroupPillsInto(container, compact, countSource) {
   const counts = new Map();
   const source = countSource ?? activeMembers();
   source.forEach((m) => {
-    const key = memberOrgGroupKey(m);
-    counts.set(key, (counts.get(key) || 0) + 1);
+    for (const key of memberOrgGroupKeys(m)) {
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
   });
   const pills = ORG_GROUP_PILL_ORDER.map((key) => {
     if (key === "all") {
@@ -2440,7 +2549,7 @@ function renderDetail(member) {
             <span>${escapeHtml(member.theme)}</span>
           </div>
           <h2 class="detail-name">${escapeHtml(member.name)}</h2>
-          <p class="detail-org" aria-label="Team: ${escapeHtml(memberOrgGroupLabel(member))}"><span class="detail-org-label">Team</span><span class="detail-org-pill"><span class="theme-dot theme-dot--detail" style="color:${memberOrgGroupDotColor(member)};background:${memberOrgGroupDotColor(member)};"></span><span class="detail-org-name">${escapeHtml(memberOrgGroupLabel(member))}</span></span></p>
+          <p class="detail-org" aria-label="Team: ${escapeHtml(memberOrgGroupLabel(member))}"><span class="detail-org-label">Team</span><span class="detail-org-pill">${renderMemberOrgDotsHtml(member, "theme-dot--detail")}<span class="detail-org-name">${escapeHtml(memberOrgGroupLabel(member))}</span></span></p>
           <p class="detail-description">${member.description ? escapeHtml(member.description) : ""}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
@@ -2484,7 +2593,7 @@ function renderRoster(list) {
             <div>
               <p class="roster-name">${escapeHtml(member.name)}</p>
               <p class="roster-theme">
-                <span class="roster-team"><span class="theme-dot theme-dot--roster" style="color:${memberOrgGroupDotColor(member)};background:${memberOrgGroupDotColor(member)};"></span><span class="roster-team-label">${escapeHtml(memberOrgGroupLabel(member))}</span></span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
+                <span class="roster-team">${renderMemberOrgDotsHtml(member, "theme-dot--roster")}<span class="roster-team-label">${escapeHtml(memberOrgGroupLabel(member))}</span></span><span class="roster-theme-split"> · </span><span class="roster-theme-name">${member.isBoss ? "Founder" : escapeHtml(member.theme)}</span>
               </p>
             </div>
             <div class="roster-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
