@@ -28,8 +28,6 @@ TARGET_NAMES = [
     "Franco Mangone",
 ]
 
-CONTENT_TEAM_NAMES = {n.lower() for n in ("Arturas Vil", "Catalin")}
-
 PALETTE = {
     "Geo Builders": "#F97316",
     "Research & Science": "#06B6D4",
@@ -77,9 +75,7 @@ def ensure_url(raw: str, kind: str) -> str:
 
 
 def infer_theme(name: str, skills: List[str], desc: str) -> str:
-    if name.strip().lower() in CONTENT_TEAM_NAMES:
-        return "Writing & Content"
-    blob = " ".join(skills).lower() + " " + desc.lower()
+    blob = " ".join(skills).lower() + " " + (desc or "").lower()
     if any(k in blob for k in ("solidity", "web3", "defi", "blockchain", "crypto", "zero knowledge")):
         return "Crypto & Web3"
     if any(
@@ -139,8 +135,6 @@ def best_row_for_name(rows: List[dict], target: str) -> Optional[dict]:
 def csv_row_to_member(row: dict, entity_id: Optional[str]) -> dict:
     name = (row.get("Name") or "").strip()
     desc = (row.get("Description") or "").strip()
-    if not desc:
-        desc = f"{name} — Geo community profile (testnet export)."
     skills_raw = row.get("Skills") or ""
     skills = [s.strip() for s in re.split(r"[;]", skills_raw) if s.strip()]
     spaces = parse_spaces(row.get("Space ids") or "")
@@ -183,6 +177,30 @@ def load_members_js(path: Path) -> dict:
 def write_members_js(path: Path, data: dict) -> None:
     body = "window.GEO_CURATORS_DATA = " + json.dumps(data, ensure_ascii=False) + ";\n"
     path.write_text(body, encoding="utf-8")
+
+
+def is_placeholder_description(desc: str) -> bool:
+    d = (desc or "").strip().lower()
+    if not d:
+        return False
+    return "geo community profile" in d or "testnet export" in d
+
+
+def strip_placeholder_descriptions(members: List[dict]) -> int:
+    """Clear synthetic testnet placeholder bios; keep real CSV bios only."""
+    n = 0
+    for m in members:
+        desc = (m.get("description") or "").strip()
+        if not is_placeholder_description(desc):
+            continue
+        m["description"] = ""
+        m["descLength"] = 0
+        skills = m.get("skills") if isinstance(m.get("skills"), list) else []
+        theme = infer_theme((m.get("name") or ""), skills, "")
+        m["theme"] = theme
+        m["color"] = PALETTE.get(theme, "#94A3B8")
+        n += 1
+    return n
 
 
 def recompute_summary(members: List) -> dict:
@@ -237,6 +255,10 @@ def main() -> None:
     if missing:
         print(f"Missing from CSV: {missing}", file=sys.stderr)
         sys.exit(1)
+
+    stripped = strip_placeholder_descriptions(members)
+    if stripped:
+        print(f"Stripped placeholder descriptions from {stripped} profiles.")
 
     data["members"] = members
     data["summary"] = recompute_summary(members)

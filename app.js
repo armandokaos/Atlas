@@ -269,9 +269,8 @@ function galaxySkillHueToHex(index) {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-const membersSourceFiltered = data.members
-  .filter((member) => member.description && member.description.trim())
-  .filter((member) => member.avatarUrl && member.avatarUrl.trim());
+/** Bios optional: show every profile that has an avatar (descriptions may be empty). */
+const membersSourceFiltered = data.members.filter((member) => member.avatarUrl && member.avatarUrl.trim());
 
 const __galaxySkillFreq = (() => {
   const m = new Map();
@@ -1753,7 +1752,7 @@ function formatNumber(value) {
 }
 
 function truncate(text, max = 150) {
-  if (!text) return "No bio available yet.";
+  if (!text || !String(text).trim()) return "";
   if (text.length <= max) return text;
   return `${text.slice(0, max).trim()}...`;
 }
@@ -2247,7 +2246,7 @@ function renderDetail(member) {
           </div>
           <h2 class="detail-name">${escapeHtml(member.name)}</h2>
           <p class="detail-org"><span class="detail-org-label">Team</span>${escapeHtml(memberOrgGroupLabel(member))}</p>
-          <p class="detail-description">${member.description || "No detailed bio has been added yet."}</p>
+          <p class="detail-description">${member.description ? escapeHtml(member.description) : ""}</p>
           ${renderDetailSkillsSection(member)}
           <div class="detail-markers" data-entity-id="${member.entityId}">
             <div class="detail-markers-label">Your rating and tag</div>
