@@ -17,16 +17,14 @@ const ROSTER_PAGE_SIZE = 12;
 
 /** First-page roster order; names must match `member.name` in members-data (see audit in init). */
 const ROSTER_PAGE1_PIN_ORDER = [
-  "Kevin",
-  "Kevin Primicerio",
-  "Iris",
-  "MaximVL",
-  "Thomas Freestone",
-  "Federico Sendra",
-  "Pablo Ragalli",
-  "Farida Ahmed",
-  "Ishita Sharma",
-  "Victor Amigo",
+  "Arturas Vil",
+  "Catalin",
+  "Dovile Sv",
+  "Franco Mangone",
+  "Juan Manuel Sobral",
+  "Jerome de Tychey",
+  "Mario De Los Santos",
+  "Abdul Sammad Saeed",
 ];
 
 /**
@@ -37,14 +35,14 @@ const ORG_GROUP_RAW_SPECS = [
   {
     key: "geo-core",
     label: "Geo core team",
-    names: ["Yaniv Tal", "Preston Mantel", "Nate", "Nik", "Adam Fischer", "Hugues de Braucourt", "Byron"],
+    names: [],
   },
   {
     key: "geo-content",
     label: "Geo content team",
-    names: ["Bertrand Armando", "CptMoh", "Vytautas", "Hashir", "Rushab Taneja", "Ahmed Abdelmalek", "Dan Cordie"],
+    names: ["Arturas Vil", "Catalin", "Dovile Sv"],
   },
-  { key: "geo-dev", label: "Geo core devs", names: ["Walaa01", "Rex"] },
+  { key: "geo-dev", label: "Geo core devs", names: [] },
   {
     key: "curators-elite",
     label: "Curators Elite",
@@ -385,13 +383,12 @@ const memberSummary = {
 
 const bossMember = members.find((member) => member.isBoss) || null;
 const spotlightPriority = new Map([
-  ["Rushab Taneja", 5],
-  ["Yaniv Tal", 4],
-  ["Preston Mantel", 3],
-  ["Federico Sendra", 2],
-  ["MaximVL", 1],
-  ["Dan3", -1],
-  ["Joueurs", -2],
+  ["Arturas Vil", 3],
+  ["Catalin", 3],
+  ["Dovile Sv", 3],
+  ["Franco Mangone", 2],
+  ["Juan Manuel Sobral", 2],
+  ["Johns Gresham", -1],
 ]);
 
 const __rosterPinNameSet = new Set(members.map((m) => m.name));
@@ -403,7 +400,6 @@ ROSTER_PAGE1_PIN_ORDER.forEach((name) => {
 
 const demoMember =
   ROSTER_PAGE1_PIN_ORDER.map((n) => members.find((m) => m.name === n)).find(Boolean) ||
-  members.find((member) => member.name === "Preston Mantel") ||
   bossMember ||
   members[0] ||
   null;
