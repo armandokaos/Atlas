@@ -805,20 +805,30 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
     drawConstellationMemberGradientDisk(ctx, x, y, radAvatar, hex);
   }
 
-  ctx.beginPath();
-  ctx.arc(x, y, radRing * 0.9, -0.35, -0.35 + 1.0);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
-  ctx.lineWidth = 1.1;
-  ctx.stroke();
+  if (!hov) {
+    ctx.beginPath();
+    ctx.arc(x, y, radRing * 0.9, -0.35, -0.35 + 1.0);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
 
-  ctx.beginPath();
-  ctx.arc(x, y, radRing, 0, Math.PI * 2);
-  ctx.strokeStyle = `rgba(${r},${g},${b},0.75)`;
-  ctx.lineWidth = sel ? 2.35 : 1.45;
-  ctx.shadowBlur = sel ? 14 : hov ? 8 : 6;
-  ctx.shadowColor = `rgba(${r},${g},${b},${hov ? 0.28 : 0.22})`;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(x, y, radRing, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.75)`;
+    ctx.lineWidth = sel ? 2.35 : 1.45;
+    ctx.shadowBlur = sel ? 14 : 6;
+    ctx.shadowColor = `rgba(${r},${g},${b},0.22)`;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  } else {
+    /** Hover: `radRing` is layout-sized — drawing it on a huge `radAvatar` looked like a stray inner circle. */
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.5)`;
+    ctx.lineWidth = GALAXY_HOVER_OUTER_RING_LINE;
+    const ringR = radAvatar - GALAXY_HOVER_OUTER_RING_LINE * 0.55;
+    ctx.arc(x, y, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   if (sel) {
     ctx.beginPath();
@@ -829,13 +839,6 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
     ctx.arc(x, y, radRing + Math.min(15, radRing * 0.32), 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-  } else if (hov) {
-    ctx.beginPath();
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.38)`;
-    ctx.lineWidth = GALAXY_HOVER_OUTER_RING_LINE;
-    const ringR = Math.max(radRing + 1, radAvatar - GALAXY_HOVER_OUTER_RING_LINE * 0.55);
-    ctx.arc(x, y, ringR, 0, Math.PI * 2);
-    ctx.stroke();
   }
   ctx.restore();
 }
