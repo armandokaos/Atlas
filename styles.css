@@ -421,6 +421,10 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 14px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(165, 115, 241, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 255, 0.92));
 }
 
 .spotlight-org-row {
@@ -428,21 +432,26 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 14px;
-  margin-top: 12px;
+  margin-top: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(165, 115, 241, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 255, 0.92));
 }
 
 .spotlight-theme-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 700;
+  color: rgba(105, 92, 134, 0.88);
+  font-weight: 800;
   flex-shrink: 0;
 }
 
 .theme-pills--spotlight {
   flex: 1 1 220px;
   min-width: 0;
+  gap: 8px;
 }
 
 .visual-grid {
@@ -571,8 +580,8 @@ h1 {
 
 .roster-topbar {
   display: grid;
-  grid-template-columns: minmax(240px, 0.72fr) minmax(420px, 1.28fr);
-  gap: 24px;
+  grid-template-columns: minmax(260px, 0.74fr) minmax(420px, 1.26fr);
+  gap: 22px;
   align-items: start;
   margin-bottom: 24px;
 }
@@ -603,27 +612,35 @@ h1 {
 
 .spotlight-panel {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 20px;
   border-radius: 28px;
   border: 1px solid rgba(165, 115, 241, 0.14);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(248, 244, 253, 0.92)),
     rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 48px rgba(189, 169, 226, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 14px 38px rgba(189, 169, 226, 0.11);
 }
 
 .spotlight-filters {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   max-width: none;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(165, 115, 241, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 255, 0.92));
 }
 
 .spotlight-search {
   width: 100%;
   box-shadow: none;
+  margin-bottom: 2px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 249, 255, 0.96));
 }
@@ -631,19 +648,19 @@ h1 {
 .spotlight-filter {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 14px;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid rgba(165, 115, 241, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 244, 253, 0.96));
   color: var(--text);
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 10px 30px rgba(189, 169, 226, 0.14);
+  box-shadow: 0 6px 18px rgba(189, 169, 226, 0.12);
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
@@ -657,8 +674,10 @@ h1 {
 }
 
 .spotlight-filter-count {
-  color: var(--muted);
-  font-size: 0.88rem;
+  color: rgba(103, 96, 125, 0.86);
+  font-size: 0.79rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .canvas-wrap {
@@ -1109,8 +1128,9 @@ h1 {
 
 .roster-grid {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
 }
 
 .roster-connect {
@@ -1118,7 +1138,9 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 14px;
-  margin-top: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(165, 115, 241, 0.1);
 }
 
 .roster-space-chip {
@@ -1256,25 +1278,35 @@ h1 {
 }
 
 .roster-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 18px;
+  min-height: 325px;
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.92));
   cursor: pointer;
-  transition: transform 180ms ease, border-color 180ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 26px rgba(174, 153, 215, 0.1);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .roster-item:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: rgba(116, 71, 245, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 16px 36px rgba(150, 120, 212, 0.16);
 }
 
 .roster-top {
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  align-items: center;
-  margin-bottom: 12px;
+  align-items: flex-start;
+  margin-bottom: 2px;
 }
 
 .roster-avatar {
@@ -1317,9 +1349,10 @@ h1 {
 
 .roster-name {
   margin: 0 0 4px;
-  font-size: 1.3rem;
+  font-size: 1.18rem;
   font-weight: 800;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
 }
 
 .roster-team {
@@ -1375,13 +1408,17 @@ h1 {
 
 .roster-theme {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.92rem;
+  color: rgba(104, 95, 128, 0.88);
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
 }
 
 .roster-description {
   margin: 0;
-  line-height: 1.65;
+  line-height: 1.58;
+  font-size: 0.9rem;
+  color: rgba(53, 47, 70, 0.86);
+  min-height: calc(1.65em * 4);
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -1402,6 +1439,15 @@ h1 {
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid rgba(165, 115, 241, 0.12);
+}
+
+.spotlight-panel .marker-filters {
+  margin-top: 0;
+  padding: 10px 12px;
+  border-top: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(165, 115, 241, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 255, 0.92));
 }
 
 .marker-filters-inner {
@@ -1433,17 +1479,18 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 11px;
   border-radius: 999px;
   border: 1px solid rgba(165, 115, 241, 0.16);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 244, 253, 0.94));
   color: var(--text);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  box-shadow: 0 5px 16px rgba(176, 156, 216, 0.1);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .marker-chip:hover,
@@ -1460,9 +1507,10 @@ h1 {
 }
 
 .marker-chip-count {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .marker-chip--pastille {
@@ -1705,6 +1753,10 @@ h1 {
   .roster-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .roster-item {
+    min-height: 300px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1721,6 +1773,10 @@ h1 {
 
   .roster-grid {
     grid-template-columns: 1fr;
+  }
+
+  .roster-item {
+    min-height: 0;
   }
 
   .detail-identity {
