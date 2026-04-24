@@ -246,9 +246,6 @@ function normalizeMemberSkills(raw) {
 
 const GALAXY_SKILL_OTHER = "__galaxy_other__";
 
-/** Rayon visuel unique des nœuds constellation (anneaux), identique pour tous les profils. */
-const GALAXY_MEMBER_DOT_RADIUS = 16;
-
 const GALAXY_AVATAR_PRELOAD_PER_FRAME = 6;
 
 /** Distinct hue per skill index (Skills galaxy); output is always `#rrggbb` for canvas alpha suffixes. */
@@ -275,6 +272,23 @@ function galaxySkillHueToHex(index) {
 
 /** Bios optional: show every profile that has an avatar (descriptions may be empty). */
 const membersSourceFiltered = data.members.filter((member) => member.avatarUrl && member.avatarUrl.trim());
+
+/** Synced from the current galaxy layout list length (inverse: fewer people → larger dots). */
+let __galaxyVisibleCountForRadius = 1;
+
+/** Radius in px (logical canvas): small crowd → large circles, big crowd → compact nodes. */
+function galaxyMemberDotRadiusPx(visibleCount) {
+  const n = Math.max(1, Number(visibleCount) || 1);
+  const rMin = 8;
+  const rMax = 30;
+  const nLo = 18;
+  const nHi = 400;
+  if (n <= nLo) return rMax;
+  if (n >= nHi) return rMin;
+  const u = (n - nLo) / (nHi - nLo);
+  const s = u * u * (3 - 2 * u);
+  return rMax - s * (rMax - rMin);
+}
 
 const __galaxySkillFreq = (() => {
   const m = new Map();
@@ -353,10 +367,12 @@ const members = membersSourceFiltered.map((member, index) => {
     y: 0,
     vx: 0,
     vy: 0,
-    radius: GALAXY_MEMBER_DOT_RADIUS,
+    radius: galaxyMemberDotRadiusPx(membersSourceFiltered.length),
     seed: index * 0.37,
   };
 });
+
+__galaxyVisibleCountForRadius = Math.max(1, members.length);
 
 ORG_GROUP_RAW_SPECS.forEach((spec) => {
   if (!spec.names.length) return;
@@ -2449,7 +2465,8 @@ function renderRoster(list) {
 
 /** Demi-axes du disque Vogel (un seul thème) : marge pour grosses pastilles + labels. */
 function galaxySingleDiskHalfExtents(width, height) {
-  const edge = 40 + GALAXY_MEMBER_DOT_RADIUS * 2.4;
+  const dotR = galaxyMemberDotRadiusPx(__galaxyVisibleCountForRadius);
+  const edge = 40 + dotR * 2.4;
   return {
     diskHalfW: Math.max(96, width * 0.47 - edge),
     diskHalfH: Math.max(92, height * 0.43 - edge),
@@ -2472,7 +2489,7 @@ function memberDisplayRadius(member, selected, hoveredId) {
   void member;
   void selected;
   void hoveredId;
-  return GALAXY_MEMBER_DOT_RADIUS;
+  return galaxyMemberDotRadiusPx(__galaxyVisibleCountForRadius);
 }
 
 function truncateGalaxyLabel(name, max = 20) {
@@ -2540,6 +2557,7 @@ function resizeCanvas() {
 /** When a single theme is shown, snap dots to Vogel targets so they are never stuck off-screen (bitmap/CSS size mismatch). */
 function snapSingleThemeVogelPositions(list) {
   if (!list.length) return;
+  __galaxyVisibleCountForRadius = Math.max(1, list.length);
   const { width, height } = readCanvasCssSize();
   const anchors = anchorMap(list, width, height);
   if (anchors.size !== 1) return;
@@ -2561,6 +2579,7 @@ function snapSingleThemeVogelPositions(list) {
 
 /** Même physique que le paysage ; `freezeEntityId` fige un membre (focus perso) pour ne pas bouger son point de sortie. */
 function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null) {
+  __galaxyVisibleCountForRadius = Math.max(1, list.length);
   const anchors = anchorMap(list, width, height);
   const singleThemeDisk = anchors.size === 1;
   const orbitScale = galaxyOrbitScale();
@@ -2717,6 +2736,7 @@ function pickMemberFromPointer(event) {
     y = (y / bounds.height) * logicH;
   }
   const list = visibleMembers();
+  __galaxyVisibleCountForRadius = Math.max(1, list.length);
 
   let nearest = null;
   let nearestDistance = Infinity;
