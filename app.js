@@ -767,7 +767,7 @@ function drawConstellationMemberGradientDisk(ctx, x, y, rad, baseHex) {
   ctx.fill();
 }
 
-/** Multiplier applied to ring + glow when `interaction === "hover"` (1 = baseline). */
+/** Multiplier for hover scale on the avatar disk only (rings stay near baseline size). */
 const GALAXY_HOVER_INTENSITY = 1.95;
 
 /** Strong hover scale so the active dot clearly pops above neighbors (canvas, not CSS). */
@@ -785,38 +785,40 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   const hov = interaction === "hover";
   const baseR = Number(radius) || 8;
   const hoverScale = galaxyHoverVisualScale(baseR);
-  const scale = sel ? 1.1 : hov ? hoverScale : 1;
-  const rad = baseR * scale;
+  const selScale = 1.1;
+  /** Ring geometry: only selected grows rings; hover grows the avatar disk, not the chrome. */
+  const radRing = baseR * (sel ? selScale : 1);
+  const radAvatar = baseR * (sel ? selScale : hov ? hoverScale : 1);
   const img = galaxyAvatarReadyImg(avatarUrl);
 
   ctx.save();
   if (img) {
     try {
-      drawGalaxyAvatarCoverInCircle(ctx, img, x, y, rad);
+      drawGalaxyAvatarCoverInCircle(ctx, img, x, y, radAvatar);
     } catch {
-      drawConstellationMemberGradientDisk(ctx, x, y, rad, hex);
+      drawConstellationMemberGradientDisk(ctx, x, y, radAvatar, hex);
     }
   } else {
-    drawConstellationMemberGradientDisk(ctx, x, y, rad, hex);
+    drawConstellationMemberGradientDisk(ctx, x, y, radAvatar, hex);
   }
 
   ctx.beginPath();
-  ctx.arc(x, y, rad * 0.9, -0.35, -0.35 + 1.0);
+  ctx.arc(x, y, radRing * 0.9, -0.35, -0.35 + 1.0);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
   ctx.lineWidth = 1.1;
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.arc(x, y, radRing, 0, Math.PI * 2);
   ctx.strokeStyle = `rgba(${r},${g},${b},0.75)`;
-  ctx.lineWidth = sel ? 2.35 : hov ? Math.min(5, 2.15 * GALAXY_HOVER_INTENSITY) : 1.45;
-  ctx.shadowBlur = sel ? 14 : hov ? 16 * GALAXY_HOVER_INTENSITY : 6;
-  ctx.shadowColor = `rgba(${r},${g},${b},${hov ? Math.min(0.88, 0.38 * GALAXY_HOVER_INTENSITY) : 0.22})`;
+  ctx.lineWidth = sel ? 2.35 : 1.45;
+  ctx.shadowBlur = sel ? 14 : hov ? 8 : 6;
+  ctx.shadowColor = `rgba(${r},${g},${b},${hov ? 0.28 : 0.22})`;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   ctx.beginPath();
-  ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.arc(x, y, radRing, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(117, 99, 164, 0.14)";
   ctx.lineWidth = 1;
   ctx.stroke();
@@ -827,14 +829,14 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
     ctx.lineWidth = 2;
     ctx.setLineDash(canvasReducedMotion() ? [] : [4, 5]);
     ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.025;
-    ctx.arc(x, y, rad + Math.min(15, rad * 0.32), 0, Math.PI * 2);
+    ctx.arc(x, y, radRing + Math.min(15, radRing * 0.32), 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
   } else if (hov) {
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.5)`;
-    ctx.lineWidth = Math.min(4.2, 2 * GALAXY_HOVER_INTENSITY);
-    ctx.arc(x, y, rad + Math.min(31, rad * 0.55), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.24)`;
+    ctx.lineWidth = 1.2;
+    ctx.arc(x, y, radRing + Math.min(7, radRing * 0.14), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
