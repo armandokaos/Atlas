@@ -1072,32 +1072,30 @@ function gfFitHubNameLines(ctx, name, maxW, maxH) {
   return { lines: [truncateGalaxyLabel(clean, 30)], fontPx: 7, lineHeight: 9 };
 }
 
+/** Member name under the central hub (same idea as skill-node labels below their dots). */
 function gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   if (labelAlpha <= 0.02) return;
-  const padX = 14;
-  const padY = 12;
-  const maxW = Math.max(40, hubR * 2 - padX * 2);
-  const maxH = Math.max(28, hubR * 2 - padY * 2);
+  const gap = 10;
+  const maxW = Math.max(140, Math.min(380, hubR * 5.2));
+  const maxH = 112;
   const { lines, fontPx, lineHeight } = gfFitHubNameLines(ctx, member.name, maxW, maxH);
-  const totalH = lines.length * lineHeight;
-  const yStart = hy - totalH / 2 + lineHeight * 0.72;
+  const y0 = hy + hubR + gap;
   const pop = 0.97 + 0.03 * Math.min(1, Math.max(0, labelPop));
-  const onAvatar = Boolean(galaxyAvatarReadyImg(String(member?.avatarUrl || "").trim()));
   ctx.save();
   ctx.globalAlpha = labelAlpha;
-  ctx.translate(hx, hy);
+  ctx.translate(hx, y0);
   ctx.scale(pop, pop);
-  ctx.translate(-hx, -hy);
+  ctx.translate(-hx, -y0);
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  ctx.textBaseline = "top";
   ctx.font = `500 ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
-  ctx.fillStyle = "rgba(32, 28, 44, 0.9)";
-  if (onAvatar) {
-    ctx.shadowColor = "rgba(255, 255, 255, 0.92)";
-    ctx.shadowBlur = 5;
-  }
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.fillStyle = "rgba(32, 28, 44, 0.92)";
   lines.forEach((line, i) => {
-    const ly = yStart + i * lineHeight;
+    const ly = y0 + i * lineHeight;
+    ctx.strokeText(line, hx, ly);
     ctx.fillText(line, hx, ly);
   });
   ctx.restore();
@@ -1135,7 +1133,7 @@ function gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop) {
   ctx.strokeStyle = "rgba(117, 99, 164, 0.16)";
   ctx.lineWidth = 1;
   ctx.stroke();
-  gfDrawHubName(ctx, member, hx, hy, hubR - 5, labelAlpha, labelPop);
+  gfDrawHubName(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
   ctx.restore();
 }
 
