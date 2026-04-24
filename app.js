@@ -77,6 +77,8 @@ const ORG_GROUP_PILL_ORDER = [
   "curators-red",
   "curators-yellow",
   "curators-orange",
+  /** Default bucket: not in named geo teams and no badge mapped to a curator color (incl. blue/purple/black tags). */
+  "curators",
 ];
 
 const ORG_GROUP_DOT_COLORS = {
@@ -245,7 +247,7 @@ function normalizeMemberSkills(raw) {
 const GALAXY_SKILL_OTHER = "__galaxy_other__";
 
 /** Rayon visuel unique des nœuds constellation (anneaux), identique pour tous les profils. */
-const GALAXY_MEMBER_DOT_RADIUS = 13;
+const GALAXY_MEMBER_DOT_RADIUS = 16;
 
 const GALAXY_AVATAR_PRELOAD_PER_FRAME = 6;
 
@@ -2078,7 +2080,6 @@ function renderThemePillsInto(container, compact) {
 
 function renderOrgGroupPillsInto(container, compact) {
   if (!container) return;
-  if (state.orgGroup === "curators") state.orgGroup = "all";
   const counts = new Map();
   const source = uiMembers();
   source.forEach((m) => {
