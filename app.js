@@ -767,14 +767,21 @@ function drawConstellationMemberGradientDisk(ctx, x, y, rad, baseHex) {
   ctx.fill();
 }
 
-/** Multiplier for hover scale on the avatar disk only (rings stay near baseline size). */
-const GALAXY_HOVER_INTENSITY = 1.95;
+/** Stroke width of the outer hover ring (2nd circle); used to align avatar edge to that ring. */
+const GALAXY_HOVER_OUTER_RING_LINE = 1.2;
+/** Extra radius (avatar + outer ring) vs `baseR` is multiplied by this on hover (+30%). */
+const GALAXY_HOVER_GROWTH_SCALE = 1.3;
 
-/** Strong hover scale so the active dot clearly pops above neighbors (canvas, not CSS). */
-function galaxyHoverVisualScale(baseR) {
+/** Centerline radius of the 2nd (outer) ring on hover — outside the team-color ring at `baseR`. */
+function galaxyHoverSecondRingPathRadius(baseR) {
   const r = Number(baseR) || 8;
-  const raw = r < 11 ? 1.52 : r < 14 ? 1.38 : r < 18 ? 1.28 : r < 24 ? 1.18 : 1.12;
-  return 1 + (raw - 1) * GALAXY_HOVER_INTENSITY;
+  return r + Math.min(7, r * 0.14) * GALAXY_HOVER_GROWTH_SCALE;
+}
+
+/** Avatar disk radius on hover: grows to the outer edge of the 2nd ring stroke. */
+function galaxyHoverAvatarRadius(baseR) {
+  const r2 = galaxyHoverSecondRingPathRadius(baseR);
+  return r2 + GALAXY_HOVER_OUTER_RING_LINE * 0.5;
 }
 
 /** Constellation nodes: avatar (when loaded) + rings; interaction = none|hover|selected */
@@ -784,11 +791,10 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   const sel = interaction === "selected";
   const hov = interaction === "hover";
   const baseR = Number(radius) || 8;
-  const hoverScale = galaxyHoverVisualScale(baseR);
   const selScale = 1.1;
-  /** Ring geometry: only selected grows rings; hover grows the avatar disk, not the chrome. */
+  /** Ring geometry: only selected grows rings; hover grows avatar to the 2nd ring, not the rings themselves. */
   const radRing = baseR * (sel ? selScale : 1);
-  const radAvatar = baseR * (sel ? selScale : hov ? hoverScale : 1);
+  const radAvatar = sel ? baseR * selScale : hov ? galaxyHoverAvatarRadius(baseR) : baseR;
   const img = galaxyAvatarReadyImg(avatarUrl);
 
   ctx.save();
@@ -817,12 +823,6 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  ctx.beginPath();
-  ctx.arc(x, y, radRing, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(117, 99, 164, 0.14)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
   if (sel) {
     ctx.beginPath();
     ctx.strokeStyle = "rgba(116, 71, 245, 0.45)";
@@ -835,8 +835,8 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   } else if (hov) {
     ctx.beginPath();
     ctx.strokeStyle = `rgba(${r},${g},${b},0.24)`;
-    ctx.lineWidth = 1.2;
-    ctx.arc(x, y, radRing + Math.min(7, radRing * 0.14), 0, Math.PI * 2);
+    ctx.lineWidth = GALAXY_HOVER_OUTER_RING_LINE;
+    ctx.arc(x, y, galaxyHoverSecondRingPathRadius(baseR), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
@@ -2981,7 +2981,7 @@ function drawFrame() {
     list.forEach((member) => {
       const radius = memberDisplayRadius(member, selected, hoveredId);
       const rLabel =
-        member.entityId === hoveredId ? radius * galaxyHoverVisualScale(radius) : radius;
+        member.entityId === hoveredId ? galaxyHoverAvatarRadius(radius) : radius;
       const label = truncateGalaxyLabel(member.name, 22);
       const tx = member.x;
       const ty = member.y + rLabel + 4;
@@ -2997,8 +2997,7 @@ function drawFrame() {
     const pin = list.find((m) => m.entityId === hoveredId) || selected;
     if (pin && (hoveredId || selected)) {
       const radius = memberDisplayRadius(pin, selected, hoveredId);
-      const rLabel =
-        pin.entityId === hoveredId ? radius * galaxyHoverVisualScale(radius) : radius;
+      const rLabel = pin.entityId === hoveredId ? galaxyHoverAvatarRadius(radius) : radius;
       ctx.save();
       ctx.font = CANVAS_FONT_MEMBER_PIN;
       ctx.textAlign = "left";
@@ -3038,9 +3037,7 @@ function pickMemberFromPointer(event) {
   list.forEach((member) => {
     const rBase = memberDisplayRadius(member, selected, state.hoveredId);
     const onHover = member.entityId === state.hoveredId;
-    const hitMul = onHover ? 1 + (1.55 - 1) * GALAXY_HOVER_INTENSITY : 1.2;
-    const hitPad = onHover ? 14 * GALAXY_HOVER_INTENSITY : 14;
-    const hitR = rBase * hitMul + hitPad;
+    const hitR = onHover ? galaxyHoverAvatarRadius(rBase) + Math.round(10 * GALAXY_HOVER_GROWTH_SCALE) : rBase * 1.2 + 14;
     const distance = Math.hypot(member.x - x, member.y - y);
     if (distance < hitR && distance < nearestDistance) {
       nearest = member;
