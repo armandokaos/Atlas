@@ -639,6 +639,28 @@ function isGalaxyClusterFocus() {
   return state.skillGalaxy !== "all";
 }
 
+/** Search + spotlight + marks only — ignores galaxy theme/org/skill pills (same density target as « All »). */
+function galaxyRadiusReferenceMemberCount() {
+  const list = applyPersonalFilters(
+    spotlightMembers(uiMembers().filter((m) => searchQueryMatchesHaystack(buildMemberSearchHaystack(m), state.query))),
+  );
+  return Math.max(1, list.length);
+}
+
+/**
+ * Count passed to `galaxyMemberDotRadiusPx` / overlap. In cluster focus, blend toward the full-map
+ * reference so filtered views don't use tiny-N sizing (huge dots + cramped Vogel disk).
+ */
+const GALAXY_CLUSTER_RADIUS_BLEND = 0.82;
+
+function galaxyRadiusLayoutCountFromList(list) {
+  const vis = Math.max(1, list.length);
+  if (!isGalaxyClusterFocus() || galaxyFocus.mode !== "landscape") return vis;
+  const ref = galaxyRadiusReferenceMemberCount();
+  if (ref <= vis) return vis;
+  return Math.min(ref, Math.round(vis + (ref - vis) * GALAXY_CLUSTER_RADIUS_BLEND));
+}
+
 function memberIsGalaxyClusterFocused(member) {
   if (!isGalaxyClusterFocus()) return false;
   if (state.galaxyViewMode === "category") return member.theme === state.theme;
@@ -2771,7 +2793,7 @@ function resizeCanvas() {
 /** When a single theme is shown, snap dots to Vogel targets so they are never stuck off-screen (bitmap/CSS size mismatch). */
 function snapSingleThemeVogelPositions(list) {
   if (!list.length) return;
-  __galaxyVisibleCountForRadius = Math.max(1, list.length);
+  __galaxyVisibleCountForRadius = galaxyRadiusLayoutCountFromList(list);
   const { width, height } = readCanvasCssSize();
   const anchors = anchorMap(list, width, height);
   if (anchors.size !== 1) return;
@@ -2810,7 +2832,7 @@ function clampGalaxyMemberCanvasBounds(list, width, height) {
 function applyGalaxyMemberNonOverlap(list, radiusPx, freezeEntityId = null) {
   const n = list.length;
   if (n < 2) return;
-  const pad = 4;
+  const pad = isGalaxyClusterFocus() ? 7 : 4;
   const minDist = radiusPx * 2 + pad;
   const minDistSq = minDist * minDist;
   const iterations = n > 240 ? 2 : n > 140 ? 3 : 4;
@@ -2861,7 +2883,7 @@ function applyGalaxyMemberNonOverlap(list, radiusPx, freezeEntityId = null) {
 
 /** Même physique que le paysage ; `freezeEntityId` fige un membre (focus perso) pour ne pas bouger son point de sortie. */
 function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null) {
-  __galaxyVisibleCountForRadius = Math.max(1, list.length);
+  __galaxyVisibleCountForRadius = galaxyRadiusLayoutCountFromList(list);
   const anchors = anchorMap(list, width, height);
   const singleThemeDisk = anchors.size === 1;
   const orbitScale = galaxyOrbitScale();
@@ -3107,7 +3129,7 @@ function pickMemberFromPointer(event) {
     y = (y / bounds.height) * logicH;
   }
   const list = visibleMembers();
-  __galaxyVisibleCountForRadius = Math.max(1, list.length);
+  __galaxyVisibleCountForRadius = galaxyRadiusLayoutCountFromList(list);
 
   let nearest = null;
   let nearestDistance = Infinity;
