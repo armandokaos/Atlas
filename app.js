@@ -294,8 +294,8 @@ let __galaxyVisibleCountForRadius = 1;
 /** Radius in px (logical canvas): small crowd → large circles, big crowd → compact nodes. */
 function galaxyMemberDotRadiusPx(visibleCount) {
   const n = Math.max(1, Number(visibleCount) || 1);
-  const rMin = 8;
-  const rMax = 30;
+  const rMin = 11;
+  const rMax = 36;
   const nLo = 18;
   const nHi = 400;
   if (n <= nLo) return rMax;
@@ -666,8 +666,10 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   const sel = interaction === "selected";
   const hov = interaction === "hover";
   const baseR = Number(radius) || 8;
-  const hoverBoost = baseR < 12 ? 1.15 : baseR < 18 ? 1.09 : 1.035;
-  const scale = sel ? 1.06 : hov ? hoverBoost : 1;
+  /** Strong hover scale so the active dot clearly pops above neighbors (canvas, not CSS). */
+  const hoverScale =
+    baseR < 11 ? 1.52 : baseR < 14 ? 1.38 : baseR < 18 ? 1.28 : baseR < 24 ? 1.18 : 1.12;
+  const scale = sel ? 1.1 : hov ? hoverScale : 1;
   const rad = baseR * scale;
   const img = galaxyAvatarReadyImg(avatarUrl);
 
@@ -691,9 +693,9 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
   ctx.beginPath();
   ctx.arc(x, y, rad, 0, Math.PI * 2);
   ctx.strokeStyle = `rgba(${r},${g},${b},0.75)`;
-  ctx.lineWidth = sel ? 2.25 : hov ? 1.85 : 1.45;
-  ctx.shadowBlur = sel ? 12 : hov ? 9 : 6;
-  ctx.shadowColor = `rgba(${r},${g},${b},0.22)`;
+  ctx.lineWidth = sel ? 2.35 : hov ? 2.15 : 1.45;
+  ctx.shadowBlur = sel ? 14 : hov ? 16 : 6;
+  ctx.shadowColor = `rgba(${r},${g},${b},${hov ? 0.38 : 0.22})`;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
@@ -714,9 +716,9 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
     ctx.setLineDash([]);
   } else if (hov) {
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.35)`;
-    ctx.lineWidth = 1.5;
-    ctx.arc(x, y, rad + Math.min(10, rad * 0.22), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.5)`;
+    ctx.lineWidth = 2;
+    ctx.arc(x, y, rad + Math.min(16, rad * 0.28), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
@@ -2645,6 +2647,8 @@ function snapSingleThemeVogelPositions(list) {
     member.vx = 0;
     member.vy = 0;
   });
+  const rSnap = galaxyMemberDotRadiusPx(__galaxyVisibleCountForRadius);
+  applyGalaxyMemberNonOverlap(list, rSnap, null);
   clampGalaxyMemberCanvasBounds(list, width, height);
 }
 
@@ -2657,6 +2661,59 @@ function clampGalaxyMemberCanvasBounds(list, width, height) {
   for (const member of list) {
     member.x = Math.min(width - rExt, Math.max(rExt, member.x));
     member.y = Math.min(height - rExt - bottomExtra, Math.max(rExt + topExtra, member.y));
+  }
+}
+
+/** Push member dots apart when centers are closer than twice the layout radius (soft collision). */
+function applyGalaxyMemberNonOverlap(list, radiusPx, freezeEntityId = null) {
+  const n = list.length;
+  if (n < 2) return;
+  const pad = 4;
+  const minDist = radiusPx * 2 + pad;
+  const minDistSq = minDist * minDist;
+  const iterations = n > 240 ? 2 : n > 140 ? 3 : 4;
+  const strength = n > 240 ? 0.58 : 0.45;
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < n; i++) {
+      const a = list[i];
+      const aF = freezeEntityId && a.entityId === freezeEntityId;
+      for (let j = i + 1; j < n; j++) {
+        const b = list[j];
+        const bF = freezeEntityId && b.entityId === freezeEntityId;
+        if (aF && bF) continue;
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let distSq = dx * dx + dy * dy;
+        if (distSq < 1e-8) {
+          const ang = ((i * 47 + j * 91) % 628) / 100;
+          dx = Math.cos(ang) * 0.04;
+          dy = Math.sin(ang) * 0.04;
+          distSq = dx * dx + dy * dy;
+        }
+        if (distSq >= minDistSq) continue;
+        const dist = Math.sqrt(distSq);
+        const overlap = minDist - dist;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        let pushA = overlap * strength * 0.5;
+        let pushB = overlap * strength * 0.5;
+        if (aF && !bF) {
+          pushA = 0;
+          pushB = overlap * strength;
+        } else if (!aF && bF) {
+          pushA = overlap * strength;
+          pushB = 0;
+        }
+        if (!aF) {
+          a.x -= nx * pushA;
+          a.y -= ny * pushA;
+        }
+        if (!bF) {
+          b.x += nx * pushB;
+          b.y += ny * pushB;
+        }
+      }
+    }
   }
 }
 
@@ -2710,6 +2767,7 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
     member.x = curX + member.vx;
     member.y = curY + member.vy;
   });
+  applyGalaxyMemberNonOverlap(list, dotR, freezeEntityId);
   clampGalaxyMemberCanvasBounds(list, width, height);
 }
 
@@ -2757,7 +2815,12 @@ function drawFrame() {
 
   galaxyAvatarDrainPreload(list);
 
-  list.forEach((member) => {
+  const drawOrder = [...list].sort((a, b) => {
+    const rank = (m) =>
+      m.entityId === hoveredId ? 2 : m.entityId === selected?.entityId ? 1 : 0;
+    return rank(a) - rank(b);
+  });
+  drawOrder.forEach((member) => {
     const interaction = memberRingInteraction(member, selected, hoveredId);
     const radius = memberDisplayRadius(member, selected, hoveredId);
     drawConstellationMemberRing(
@@ -2830,9 +2893,10 @@ function pickMemberFromPointer(event) {
 
   const selected = selectedMember(list);
   list.forEach((member) => {
-    const r = memberDisplayRadius(member, selected, state.hoveredId);
+    const rBase = memberDisplayRadius(member, selected, state.hoveredId);
+    const hitR = rBase * (member.entityId === state.hoveredId ? 1.55 : 1.2) + 14;
     const distance = Math.hypot(member.x - x, member.y - y);
-    if (distance < r + 20 && distance < nearestDistance) {
+    if (distance < hitR && distance < nearestDistance) {
       nearest = member;
       nearestDistance = distance;
     }
