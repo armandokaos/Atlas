@@ -769,8 +769,8 @@ function drawConstellationMemberGradientDisk(ctx, x, y, rad, baseHex) {
 
 /** Stroke width of the outer hover ring (2nd circle); used to align avatar edge to that ring. */
 const GALAXY_HOVER_OUTER_RING_LINE = 1.2;
-/** Extra radius (avatar + outer ring) vs `baseR` is multiplied by this on hover (+30%). */
-const GALAXY_HOVER_GROWTH_SCALE = 1.3;
+/** Extra radius (avatar + outer ring) vs `baseR` is multiplied by this on hover (2.6 = +100% vs former 1.3). */
+const GALAXY_HOVER_GROWTH_SCALE = 2.6;
 
 /** Centerline radius of the 2nd (outer) ring on hover — outside the team-color ring at `baseR`. */
 function galaxyHoverSecondRingPathRadius(baseR) {
