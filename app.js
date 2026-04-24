@@ -1178,7 +1178,10 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 }
 
 const PERSONAL_STORAGE_KEY = "geoAtlas.personalMarks.v1";
-const DEFAULT_MARKS_JSON_URLS = ["./geo-atlas-marks-2026-04-21-1.json", "./geo-atlas-marks-2026-04-21-2.json"];
+const DEFAULT_MARKS_JSON_URLS = [
+  "./geo-atlas-marks-2026-04-21-1.json?v=2",
+  "./geo-atlas-marks-2026-04-21-2.json?v=2",
+];
 const BADGE_KEYS = ["blue", "purple", "pink", "red", "green", "yellow", "orange", "black"];
 const BADGE_META = {
   blue: { label: "Core team", hex: "#2563eb" },
