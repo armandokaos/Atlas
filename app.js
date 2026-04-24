@@ -3481,7 +3481,16 @@ if (rosterGrid) {
     const card = event.target.closest("[data-entity-id]");
     if (!card) return;
     if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
-    state.selectedId = card.dataset.entityId;
+    const entityId = card.dataset.entityId;
+    state.selectedId = entityId;
+    const member =
+      activeMembers().find((m) => m.entityId === entityId) ||
+      uiMembers().find((m) => m.entityId === entityId) ||
+      null;
+    if (member && memberSkillsList(member).length > 0) {
+      startGalaxyPersonFocus(member);
+      return;
+    }
     renderDetail(selectedMember(visibleMembers()));
     renderRoster(activeMembers());
   });
