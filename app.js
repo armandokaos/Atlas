@@ -2801,6 +2801,24 @@ function anchorMap(list, width, height) {
   );
 }
 
+/** Stable spread anchors used when a filtered view has a single logical cluster but should not collapse to center. */
+function galaxyPseudoSpreadAnchor(member, width, height) {
+  const id = String(member?.entityId || member?.name || "");
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  const u = (h >>> 0) / 4294967295;
+  const bucket = Math.floor(u * 6) % 6;
+  const angle = (bucket / 6) * Math.PI * 2 + Math.PI / 2;
+  const span = Math.min(width, height);
+  const ringR = Math.max(72, span * 0.225);
+  const jitterA = ((u * 37.31) % 1 - 0.5) * 0.34;
+  const jitterR = ((u * 17.19) % 1 - 0.5) * Math.max(22, span * 0.04);
+  return {
+    x: width / 2 + Math.cos(angle + jitterA) * (ringR + jitterR),
+    y: height / 2 + Math.sin(angle + jitterA) * (ringR + jitterR * 0.88),
+  };
+}
+
 /**
  * Keep Engineering & AI category on the same orbital animation feel as "All"
  * (avoid forcing the single-cluster Vogel disk in that specific case).
@@ -2940,6 +2958,7 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
   __galaxyVisibleCountForRadius = galaxyRadiusLayoutCountFromList(list);
   const anchors = anchorMap(list, width, height);
   const singleThemeDisk = shouldUseSingleThemeDisk(anchors);
+  const usePseudoSpread = !singleThemeDisk && anchors.size === 1;
   const orbitScale = galaxyOrbitScale();
   const diskExtents = singleThemeDisk ? galaxySingleDiskHalfExtents(width, height) : { diskHalfW: 0, diskHalfH: 0 };
   const { diskHalfW, diskHalfH } = diskExtents;
@@ -2951,7 +2970,10 @@ function stepMemberLayoutPhysics(list, width, height, now, freezeEntityId = null
 
   list.forEach((member, index) => {
     if (freezeEntityId && member.entityId === freezeEntityId) return;
-    const anchor = anchors.get(getGalaxyClusterKey(member)) || { x: width / 2, y: height / 2 };
+    const anchor =
+      (usePseudoSpread
+        ? galaxyPseudoSpreadAnchor(member, width, height)
+        : anchors.get(getGalaxyClusterKey(member))) || { x: width / 2, y: height / 2 };
     const angle = member.seed + index * 0.065 + angleDrift;
     let targetX;
     let targetY;
