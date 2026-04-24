@@ -1931,8 +1931,10 @@ __galaxyMotionMql.addEventListener?.("change", (e) => {
 });
 
 /** Shared canvas tokens — align with light page / cards (Geo Atlas UI). */
-const CANVAS_FONT_MEMBER_NAMES = '600 12px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
-const CANVAS_FONT_MEMBER_PIN = '600 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+const CANVAS_FONT_MEMBER_NAMES =
+  '500 12.5px ui-sans-serif, system-ui, "Segoe UI", "Avenir Next", sans-serif';
+const CANVAS_FONT_MEMBER_PIN =
+  '600 13.5px ui-sans-serif, system-ui, "Segoe UI", "Avenir Next", sans-serif';
 const CANVAS_TEXT_MEMBER = "rgba(32, 28, 44, 0.94)";
 const CANVAS_TEXT_MEMBER_MUTED = "rgba(55, 50, 72, 0.78)";
 
@@ -2923,6 +2925,33 @@ function gfBackgroundDotsExcludingFocus(list, focusId, selected, hoveredId) {
     }));
 }
 
+/** Frosted pill behind galaxy names — shared cluster + map pin hover. */
+function drawGalaxyNamePillChrome(ctx, x, y, w, h, accent) {
+  const corner = Math.min(11, Math.floor(Math.min(w * 0.5, h * 0.5) - 1));
+  const g = ctx.createLinearGradient(x, y - 0.5, x, y + h + 0.5);
+  if (accent) {
+    g.addColorStop(0, "rgba(255, 255, 255, 0.995)");
+    g.addColorStop(0.5, "rgba(248, 244, 255, 0.98)");
+    g.addColorStop(1, "rgba(234, 228, 252, 0.95)");
+  } else {
+    g.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+    g.addColorStop(0.42, "rgba(252, 250, 255, 0.97)");
+    g.addColorStop(1, "rgba(241, 237, 249, 0.94)");
+  }
+  ctx.shadowColor = accent ? "rgba(116, 71, 245, 0.12)" : "rgba(92, 74, 138, 0.09)";
+  ctx.shadowBlur = accent ? 20 : 17;
+  ctx.shadowOffsetY = accent ? 5 : 4;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  gfRoundRectPath(ctx, x, y, w, h, Math.max(4, corner));
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.strokeStyle = accent ? "rgba(116, 71, 245, 0.2)" : "rgba(117, 99, 164, 0.13)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
 /** Cluster focus: name on a pill; avoids huge hover disk covering neighbors' labels. */
 function drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, canvasW, canvasH, hoverPeer) {
   const rLayout = memberDisplayRadius(member, selected, hoveredId);
@@ -2938,36 +2967,30 @@ function drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, canvasW, 
   if (!placeAbove && member.y + rVis + 30 > canvasH - 8) placeAbove = true;
   if (placeAbove && member.y - rVis - 30 < 8) placeAbove = false;
 
+  const emphasized = memberIsGalaxyHighlighted(member, selected, hoveredId);
+
   ctx.save();
   ctx.font = CANVAS_FONT_MEMBER_NAMES;
   const metrics = ctx.measureText(label);
-  const padX = 8;
-  const padY = 5;
+  const padX = 11;
+  const padY = 7;
   const pillW = Math.min(metrics.width + padX * 2, canvasW - 12);
-  const pillH = 22;
+  const pillH = 26;
 
   const cx = member.x;
   let left = cx - pillW / 2;
-  let topY = placeAbove ? member.y - rVis - 8 - pillH : member.y + rVis + 8;
+  let topY = placeAbove ? member.y - rVis - 10 - pillH : member.y + rVis + 10;
   left = Math.max(6, Math.min(left, canvasW - pillW - 6));
   topY = Math.max(6, Math.min(topY, canvasH - pillH - 6));
 
-  ctx.shadowColor = "rgba(90, 70, 130, 0.14)";
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 2;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
-  ctx.beginPath();
-  gfRoundRectPath(ctx, left, topY, pillW, pillH, 8);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(117, 99, 164, 0.22)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  drawGalaxyNamePillChrome(ctx, left, topY, pillW, pillH, emphasized);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = memberIsGalaxyHighlighted(member, selected, hoveredId) ? CANVAS_TEXT_MEMBER : CANVAS_TEXT_MEMBER_MUTED;
-  ctx.fillText(label, left + pillW / 2, topY + pillH / 2);
+  ctx.letterSpacing = emphasized ? "0.04em" : "0.025em";
+  ctx.fillStyle = emphasized ? CANVAS_TEXT_MEMBER : CANVAS_TEXT_MEMBER_MUTED;
+  ctx.fillText(label, left + pillW / 2, topY + pillH / 2 + 0.5);
+  ctx.letterSpacing = "0px";
   ctx.restore();
 }
 
@@ -3041,27 +3064,19 @@ function drawFrame() {
       ctx.save();
       ctx.font = CANVAS_FONT_MEMBER_PIN;
       if (pin.entityId === hoveredId) {
-        const tw = Math.min(ctx.measureText(name).width + 16, width - 12);
-        const th = 26;
+        const tw = Math.min(ctx.measureText(name).width + 20, width - 12);
+        const th = 28;
         let left = pin.x - tw / 2;
-        let top = pin.y - rLabel - 10 - th;
+        let top = pin.y - rLabel - 12 - th;
         left = Math.max(6, Math.min(left, width - tw - 6));
         top = Math.max(6, Math.min(top, height - th - 6));
-        ctx.shadowColor = "rgba(90, 70, 130, 0.14)";
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
-        ctx.beginPath();
-        gfRoundRectPath(ctx, left, top, tw, th, 8);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = "rgba(117, 99, 164, 0.22)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        drawGalaxyNamePillChrome(ctx, left, top, tw, th, true);
         ctx.fillStyle = CANVAS_TEXT_MEMBER;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(name, left + tw / 2, top + th / 2);
+        ctx.letterSpacing = "0.035em";
+        ctx.fillText(name, left + tw / 2, top + th / 2 + 0.5);
+        ctx.letterSpacing = "0px";
       } else {
         ctx.textAlign = "left";
         ctx.textBaseline = "bottom";
