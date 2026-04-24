@@ -27,6 +27,7 @@ const ROSTER_PAGE1_PIN_ORDER = [
   "Farida Ahmed",
   "Ishita Sharma",
   "Victor Amigo",
+  "Farouk",
 ];
 
 /**
@@ -230,9 +231,23 @@ function normalizeLinkedinUrl(value) {
   }
 }
 
+/** Resolve `./avatars/…` against the page URL so avatars load on any deploy path. */
+function resolveMemberMediaUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  if (typeof window === "undefined" || !window.location?.href) return s;
+  try {
+    return new URL(s, window.location.href).href;
+  } catch {
+    return s;
+  }
+}
+
 function renderAvatar(member, sizeClass = "") {
   if (member.avatarUrl) {
-    return `<img class="avatar-image ${sizeClass}" src="${member.avatarUrl}" alt="${member.name}" loading="lazy" />`;
+    const src = resolveMemberMediaUrl(member.avatarUrl);
+    return `<img class="avatar-image ${sizeClass}" src="${escapeHtml(src)}" alt="${escapeHtml(member.name)}" loading="lazy" />`;
   }
   return `<span class="avatar-fallback ${sizeClass}">${member.initials}</span>`;
 }
@@ -545,8 +560,8 @@ function galaxyHexToRgb(hex) {
 /** URL → { status, img } for canvas drawImage (CORS-safe when gateway allows). */
 const __galaxyAvatarByUrl = new Map();
 
-function galaxyAvatarEnsureEntry(url) {
-  const u = String(url || "").trim();
+function galaxyAvatarEnsureEntry(urlRaw) {
+  const u = resolveMemberMediaUrl(urlRaw) || String(urlRaw || "").trim();
   if (!u) return null;
   let e = __galaxyAvatarByUrl.get(u);
   if (!e) {
@@ -556,8 +571,8 @@ function galaxyAvatarEnsureEntry(url) {
   return e;
 }
 
-function galaxyAvatarStartLoad(url) {
-  const u = String(url || "").trim();
+function galaxyAvatarStartLoad(urlRaw) {
+  const u = resolveMemberMediaUrl(urlRaw) || String(urlRaw || "").trim();
   if (!u) return;
   const e = galaxyAvatarEnsureEntry(u);
   if (!e || e.status !== "idle") return;
@@ -586,7 +601,7 @@ function galaxyAvatarDrainPreload(members) {
   const seen = new Set();
   for (const m of members) {
     if (started >= cap) break;
-    const u = String(m?.avatarUrl || "").trim();
+    const u = resolveMemberMediaUrl(m?.avatarUrl) || String(m?.avatarUrl || "").trim();
     if (!u || seen.has(u)) continue;
     seen.add(u);
     const e = galaxyAvatarEnsureEntry(u);
@@ -597,8 +612,8 @@ function galaxyAvatarDrainPreload(members) {
   }
 }
 
-function galaxyAvatarReadyImg(url) {
-  const u = String(url || "").trim();
+function galaxyAvatarReadyImg(urlRaw) {
+  const u = resolveMemberMediaUrl(urlRaw) || String(urlRaw || "").trim();
   if (!u) return null;
   const e = __galaxyAvatarByUrl.get(u);
   if (!e || e.status !== "ready" || !e.img) return null;
