@@ -1098,13 +1098,21 @@ function gfSkillNodeFloat(node, index, now) {
   } else if (galaxyFocus.mode !== "person") {
     return { ox: 0, oy: 0 };
   }
+  /** Same drivers as the main galaxy disk (`GALAXY_MOTION` + `state.phase`). */
+  const { wobbleAmp, wobbleSinK, wobbleCosK, diskSpinPhaseFactor } = GALAXY_MOTION;
   const ph = node.golden + index * 0.71;
-  const t = now * 0.00092;
-  const wob = now * 0.00185 + ph * 2.08;
-  const ox1 = Math.sin(t + ph) * 16 + Math.cos(t * 0.79 + ph * 1.31) * 10;
-  const oy1 = Math.cos(t * 0.86 + ph) * 14 + Math.sin(t * 0.61 + ph * 1.11) * 9;
-  const ox2 = Math.cos(wob) * 7 + Math.sin(wob * 0.71 + 1.4) * 5;
-  const oy2 = Math.sin(wob * 0.77) * 6 + Math.cos(wob * 0.58 + 0.35) * 5;
+  const disk = state.phase * diskSpinPhaseFactor;
+  const t = now * wobbleSinK * 18 + disk * 2.1;
+  const wob = now * wobbleCosK * 22.5 + ph * 2.08 + disk;
+  const ampPx = wobbleAmp * 8.5;
+  const ox1 =
+    Math.sin(t + ph) * ampPx + Math.cos(t * 0.79 + ph * 1.31 + disk * 0.4) * (ampPx * 0.62);
+  const oy1 =
+    Math.cos(t * 0.86 + ph + disk * 0.35) * (ampPx * 0.9) + Math.sin(t * 0.61 + ph * 1.11) * (ampPx * 0.58);
+  const ox2 =
+    Math.cos(wob) * (wobbleAmp * 3.2) + Math.sin(wob * 0.71 + 1.4) * (wobbleAmp * 2.1);
+  const oy2 =
+    Math.sin(wob * 0.77) * (wobbleAmp * 2.8) + Math.cos(wob * 0.58 + 0.35) * (wobbleAmp * 2.2);
   return { ox: (ox1 + ox2) * amp, oy: (oy1 + oy2) * amp };
 }
 
@@ -1404,7 +1412,7 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 
   gfDrawFocusBackdrop(ctx, width, height);
 
-  const spin = 0;
+  const spin = state.phase * GALAXY_MOTION.diskSpinPhaseFactor;
   const geo = gfCurrentHubGeometry(now, width, height);
   const { hx, hy, hubR, hubGrowT } = geo;
   const cx0 = width / 2;
@@ -1429,7 +1437,18 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.restore();
 
     gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now, 0, 0);
+    gfDrawSkillLinks(
+      ctx,
+      hx,
+      hy,
+      hubR,
+      galaxyFocus.skillNodes,
+      linksT,
+      -now * 0.022 - state.phase * GALAXY_MOTION.diskSpinPhaseFactor * 28,
+      now,
+      0,
+      0,
+    );
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now, 0, 0);
     gfDrawBackButton(ctx);
 
@@ -1448,7 +1467,18 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     });
     ctx.restore();
     gfDrawCentralHub(ctx, member, hx, hy, hubR, 1, 1);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, 1, -now * 0.022, now, grpOx, grpOy);
+    gfDrawSkillLinks(
+      ctx,
+      hx,
+      hy,
+      hubR,
+      galaxyFocus.skillNodes,
+      1,
+      -now * 0.022 - state.phase * GALAXY_MOTION.diskSpinPhaseFactor * 28,
+      now,
+      grpOx,
+      grpOy,
+    );
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, 1, spin, now, grpOx, grpOy);
     gfDrawBackButton(ctx);
     return;
@@ -1471,7 +1501,18 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
     ctx.restore();
 
     gfDrawCentralHub(ctx, member, hx, hy, hubR, labelAlpha, labelPop);
-    gfDrawSkillLinks(ctx, hx, hy, hubR, galaxyFocus.skillNodes, linksT, -now * 0.022, now, 0, 0);
+    gfDrawSkillLinks(
+      ctx,
+      hx,
+      hy,
+      hubR,
+      galaxyFocus.skillNodes,
+      linksT,
+      -now * 0.022 - state.phase * GALAXY_MOTION.diskSpinPhaseFactor * 28,
+      now,
+      0,
+      0,
+    );
     gfDrawSkillNodes(ctx, galaxyFocus.skillNodes, skillsT, spin, now, 0, 0);
     gfDrawBackButton(ctx);
 
@@ -2712,7 +2753,8 @@ function galaxySingleDiskHalfExtents(width, height) {
 }
 
 function galaxyOrbitScale() {
-  return isGalaxyClusterFocus() ? 1.92 : 1;
+  /** Same orbit scale as the main map — cluster filters only change membership, not motion constants. */
+  return 1;
 }
 
 function memberIsGalaxyHighlighted(member, selected, hoveredId) {
