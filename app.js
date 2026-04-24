@@ -2125,6 +2125,26 @@ function activeMembers() {
   });
 }
 
+/** Theme pill counts must not use the active theme filter, or "All" and the selected theme show the same total. */
+function membersForThemePillCounts() {
+  return uiMembers().filter((m) => {
+    if (!searchQueryMatchesHaystack(buildMemberSearchHaystack(m), state.query)) return false;
+    if (state.galaxyViewMode === "team" && !memberBelongsToOrgGroup(m, state.orgGroup)) return false;
+    if (state.galaxyViewMode === "skills" && !memberMatchesSkillGalaxyFilter(m)) return false;
+    return true;
+  });
+}
+
+/** Org pill counts must not use the active org filter (same redundancy as theme pills). */
+function membersForOrgPillCounts() {
+  return uiMembers().filter((m) => {
+    if (!searchQueryMatchesHaystack(buildMemberSearchHaystack(m), state.query)) return false;
+    if (state.galaxyViewMode === "category" && state.theme !== "all" && m.theme !== state.theme) return false;
+    if (state.galaxyViewMode === "skills" && !memberMatchesSkillGalaxyFilter(m)) return false;
+    return true;
+  });
+}
+
 function applyPersonalFilters(list) {
   const { starFilter, badgeFilter } = state;
   return list.filter((m) => {
@@ -2307,16 +2327,15 @@ function renderGalaxyCategoryTeamToolbars() {
   const teamBar = document.querySelector("#galaxy-team-toolbar");
   if (!catBar || !teamBar || !galaxyThemePills || !galaxyOrgPills) return;
   const mode = state.galaxyViewMode;
-  const src = activeMembers();
   catBar.hidden = mode !== "category";
   teamBar.hidden = mode !== "team";
   if (mode === "category") {
-    renderThemePillsInto(galaxyThemePills, true, src);
+    renderThemePillsInto(galaxyThemePills, true, membersForThemePillCounts());
   } else {
     galaxyThemePills.innerHTML = "";
   }
   if (mode === "team") {
-    renderOrgGroupPillsInto(galaxyOrgPills, true, src);
+    renderOrgGroupPillsInto(galaxyOrgPills, true, membersForOrgPillCounts());
   } else {
     galaxyOrgPills.innerHTML = "";
   }
@@ -2421,9 +2440,8 @@ function renderGalaxyViewChrome() {
 }
 
 function buildThemePills() {
-  const src = activeMembers();
-  renderThemePillsInto(spotlightThemeStrip, true, src);
-  renderOrgGroupPillsInto(spotlightOrgStrip, true, src);
+  renderThemePillsInto(spotlightThemeStrip, true, membersForThemePillCounts());
+  renderOrgGroupPillsInto(spotlightOrgStrip, true, membersForOrgPillCounts());
   renderGalaxyViewChrome();
 }
 
@@ -3018,47 +3036,6 @@ function pickMemberFromPointer(event) {
 
 function refreshSpotlightUI({ rebuildThemes = false } = {}) {
   const base = activeMembers();
-  // #region agent log
-  {
-    const u = uiMembers();
-    let failRollup = 0;
-    let failThemeOnly = 0;
-    let failOrgOnly = 0;
-    for (const m of u) {
-      if (!memberMatchesGalaxyRollupFilters(m)) failRollup++;
-      const mt = state.theme === "all" || m.theme === state.theme;
-      const mo = memberBelongsToOrgGroup(m, state.orgGroup);
-      if (!mt && mo) failThemeOnly++;
-      if (mt && !mo) failOrgOnly++;
-    }
-    fetch("http://127.0.0.1:7542/ingest/dc64af76-1a35-4682-8b41-85ac6075bfac", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
-      body: JSON.stringify({
-        sessionId: "02d565",
-        hypothesisId: "H1",
-        location: "app.js:refreshSpotlightUI",
-        message: "rollup_state",
-        data: {
-          activeLen: base.length,
-          uiLen: u.length,
-          visLen: visibleMembers().length,
-          galaxyViewMode: state.galaxyViewMode,
-          theme: state.theme,
-          orgGroup: state.orgGroup,
-          skillGalaxy: state.skillGalaxy,
-          queryLen: (state.query || "").length,
-          failRollup,
-          failThemeOnly,
-          failOrgOnly,
-          orgFilterActiveOutsideTeam: state.galaxyViewMode !== "team" && state.orgGroup !== "all",
-          themeFilterActiveOutsideCategory: state.galaxyViewMode !== "category" && state.theme !== "all",
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   if (rebuildThemes) buildThemePills();
   renderSpotlightFilters(base);
   renderMarkerFilters(base);
@@ -3074,26 +3051,6 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 
 function syncUI() {
   if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
-  // #region agent log
-  fetch("http://127.0.0.1:7542/ingest/dc64af76-1a35-4682-8b41-85ac6075bfac", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
-    body: JSON.stringify({
-      sessionId: "02d565",
-      hypothesisId: "H4",
-      location: "app.js:syncUI:entry",
-      message: "sync_entry",
-      data: {
-        galaxyFocusMode: galaxyFocus.mode,
-        galaxyViewMode: state.galaxyViewMode,
-        theme: state.theme,
-        orgGroup: state.orgGroup,
-        skillGalaxy: state.skillGalaxy,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   if (state.orgGroup === "curators-red") state.orgGroup = "curators-orange";
   if (
     __galaxyLayoutReset.theme !== state.theme ||
@@ -3166,32 +3123,7 @@ void (async () => {
 })();
 
 if (canvasWrap && typeof ResizeObserver !== "undefined") {
-  let __dbgRoLast = 0;
   const ro = new ResizeObserver(() => {
-    // #region agent log
-    const now = Date.now();
-    if (now - __dbgRoLast > 400) {
-      __dbgRoLast = now;
-      fetch("http://127.0.0.1:7542/ingest/dc64af76-1a35-4682-8b41-85ac6075bfac", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
-        body: JSON.stringify({
-          sessionId: "02d565",
-          hypothesisId: "H3",
-          location: "app.js:ResizeObserver",
-          message: "canvas_wrap_resize",
-          data: {
-            activeLen: activeMembers().length,
-            visLen: visibleMembers().length,
-            galaxyViewMode: state.galaxyViewMode,
-            orgGroup: state.orgGroup,
-            theme: state.theme,
-          },
-          timestamp: now,
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     resizeCanvas();
     snapSingleThemeVogelPositions(visibleMembers());
     if (galaxyFocus.mode !== "landscape") gfRebuildSkillLayout();
@@ -3237,20 +3169,6 @@ if (galaxyCardEl) {
     if (tab) {
       const mode = tab.dataset.galaxyView;
       if (mode && mode !== state.galaxyViewMode) {
-        // #region agent log
-        fetch("http://127.0.0.1:7542/ingest/dc64af76-1a35-4682-8b41-85ac6075bfac", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "02d565" },
-          body: JSON.stringify({
-            sessionId: "02d565",
-            hypothesisId: "H2",
-            location: "app.js:galaxyTab",
-            message: "galaxy_viz_tab",
-            data: { from: state.galaxyViewMode, to: mode, orgGroup: state.orgGroup, theme: state.theme },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         state.galaxyViewMode = mode;
         if (mode === "skills") state.skillGalaxy = "all";
         syncUI();
