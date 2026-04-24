@@ -804,13 +804,13 @@ function galaxyHoverAvatarRadius(baseR) {
 }
 
 /** Constellation nodes: avatar (when loaded) + rings; interaction = none|hover|selected */
-function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, avatarUrl) {
+function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, avatarUrl, memberIsSelected = false) {
   const hex = String(baseHex || "#94A3B8");
   const { r, g, b } = galaxyHexToRgb(hex);
   const sel = interaction === "selected";
   const hov = interaction === "hover";
   const baseR = Number(radius) || 8;
-  const selScale = 1.1;
+  const selScale = 1.16;
   /** Ring geometry: only selected grows rings; hover grows avatar to the 2nd ring, not the rings themselves. */
   const radRing = baseR * (sel ? selScale : 1);
   const radAvatar = sel ? baseR * selScale : hov ? galaxyHoverAvatarRadius(baseR) : baseR;
@@ -852,13 +852,15 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
     ctx.stroke();
   }
 
-  if (sel) {
+  if (sel || memberIsSelected) {
     ctx.beginPath();
     ctx.strokeStyle = "rgba(116, 71, 245, 0.45)";
     ctx.lineWidth = 2;
     ctx.setLineDash(canvasReducedMotion() ? [] : [4, 5]);
     ctx.lineDashOffset = canvasReducedMotion() ? 0 : -performance.now() * 0.025;
-    ctx.arc(x, y, radRing + Math.min(15, radRing * 0.32), 0, Math.PI * 2);
+    const dashPad = hov ? Math.min(12, radAvatar * 0.07) : Math.min(15, radRing * 0.32);
+    const dashR = hov ? radAvatar + dashPad : radRing + dashPad;
+    ctx.arc(x, y, dashR, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -866,8 +868,8 @@ function drawConstellationMemberRing(ctx, x, y, radius, baseHex, interaction, av
 }
 
 function memberRingInteraction(member, selected, hoveredId) {
-  if (member.entityId === selected?.entityId) return "selected";
   if (member.entityId === hoveredId) return "hover";
+  if (member.entityId === selected?.entityId) return "selected";
   return "none";
 }
 
@@ -3064,19 +3066,16 @@ function drawFrame() {
       galaxyMemberBaseColor(member),
       interaction,
       member.avatarUrl || "",
+      member.entityId === selected?.entityId,
     );
   });
 
   if (isGalaxyClusterFocus()) {
-    const hoverPeer = hoveredId ? list.find((m) => m.entityId === hoveredId) : null;
-    const namesDraw = [...list].sort((a, b) => {
-      if (a.entityId === hoveredId) return 1;
-      if (b.entityId === hoveredId) return -1;
-      return 0;
-    });
-    namesDraw.forEach((member) => {
-      drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, width, height, hoverPeer);
-    });
+    const pin = list.find((m) => m.entityId === hoveredId) || selected;
+    if (pin && (hoveredId || selected)) {
+      const hoverPeer = hoveredId ? list.find((m) => m.entityId === hoveredId) : null;
+      drawGalaxyClusterMemberName(ctx, pin, selected, hoveredId, width, height, hoverPeer);
+    }
   } else {
     const pin = list.find((m) => m.entityId === hoveredId) || selected;
     if (pin && (hoveredId || selected)) {
