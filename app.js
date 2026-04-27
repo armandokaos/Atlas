@@ -1982,6 +1982,8 @@ const __galaxyLayoutReset = {
 
 const canvas = document.querySelector("#galaxy-canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
+/** Set in `resizeCanvas` — used by atmosphere cache (avoid reading debug-only state). */
+let __galaxyResizeDpr = 1;
 if (typeof ctx.imageSmoothingQuality === "string") {
   ctx.imageSmoothingQuality = "high";
 }
@@ -2029,7 +2031,8 @@ function ensureGalaxyGrainPattern(targetCtx) {
   return __galaxyGrainPattern;
 }
 
-function drawGalaxyCanvasAtmosphere(targetCtx, width, height) {
+/** Violet / cyan wash only (no grain) — reused from bitmap when size+DPR unchanged. */
+function drawGalaxyCanvasAtmosphereGradients(targetCtx, width, height) {
   const cx = width / 2;
   const cy = height / 2;
   const r = Math.max(width, height) * 0.58;
@@ -2053,7 +2056,37 @@ function drawGalaxyCanvasAtmosphere(targetCtx, width, height) {
   g2.addColorStop(1, "rgba(113, 231, 255, 0)");
   targetCtx.fillStyle = g2;
   targetCtx.fillRect(0, 0, width, height);
+}
 
+let __galaxyAtmoCache = { w: 0, h: 0, dpr: 0, cv: null };
+
+function drawGalaxyCanvasAtmosphere(targetCtx, width, height) {
+  const dpr = __galaxyResizeDpr || 1;
+  const hit =
+    __galaxyAtmoCache.cv &&
+    __galaxyAtmoCache.w === width &&
+    __galaxyAtmoCache.h === height &&
+    Math.abs(__galaxyAtmoCache.dpr - dpr) < 0.0005;
+  if (hit) {
+    targetCtx.drawImage(__galaxyAtmoCache.cv, 0, 0, width, height);
+  } else {
+    if (!__galaxyAtmoCache.cv) __galaxyAtmoCache.cv = document.createElement("canvas");
+    __galaxyAtmoCache.w = width;
+    __galaxyAtmoCache.h = height;
+    __galaxyAtmoCache.dpr = dpr;
+    const cv = __galaxyAtmoCache.cv;
+    const pw = Math.max(1, Math.round(width * dpr));
+    const ph = Math.max(1, Math.round(height * dpr));
+    cv.width = pw;
+    cv.height = ph;
+    const ox = cv.getContext("2d", { alpha: true });
+    if (ox) {
+      if (typeof ox.imageSmoothingQuality === "string") ox.imageSmoothingQuality = "high";
+      ox.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawGalaxyCanvasAtmosphereGradients(ox, width, height);
+    }
+    targetCtx.drawImage(cv, 0, 0, width, height);
+  }
   const pat = ensureGalaxyGrainPattern(targetCtx);
   if (pat) {
     targetCtx.save();
@@ -2845,10 +2878,24 @@ function readCanvasCssSize() {
   return { width, height, br: canvas.getBoundingClientRect() };
 }
 
-function resizeCanvas() {
-  const { width: cssW, height: cssH } = readCanvasCssSize();
+/** Lower DPR when many galaxy nodes draw per frame — cuts backing-store fill cost on dense views. */
+function galaxyCanvasDpr(visibleCount) {
   const raw = window.devicePixelRatio || 1;
-  const dpr = Math.min(3, Math.max(1, raw * 1.12));
+  const uncapped = Math.max(1, raw * 1.12);
+  const n = Number(visibleCount) || 0;
+  if (n < 72) return Math.min(3, uncapped);
+  if (n < 160) return Math.min(2.35, uncapped);
+  if (n < 260) return Math.min(2, uncapped);
+  return Math.min(1.72, uncapped);
+}
+
+function resizeCanvas(visibleCountHint) {
+  const { width: cssW, height: cssH } = readCanvasCssSize();
+  const n =
+    typeof visibleCountHint === "number" && Number.isFinite(visibleCountHint)
+      ? visibleCountHint
+      : visibleMembers().length;
+  const dpr = galaxyCanvasDpr(n);
   const needW = Math.max(1, Math.round(cssW * dpr));
   const needH = Math.max(1, Math.round(cssH * dpr));
   if (canvas.width !== needW || canvas.height !== needH) {
@@ -2856,6 +2903,7 @@ function resizeCanvas() {
     canvas.height = needH;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  __galaxyResizeDpr = dpr;
 }
 
 /** When a single theme is shown, snap dots to Vogel targets so they are never stuck off-screen (bitmap/CSS size mismatch). */
@@ -3089,10 +3137,10 @@ function drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, canvasW, 
 }
 
 function drawFrame() {
-  resizeCanvas();
+  const list = visibleMembers();
+  resizeCanvas(list.length);
   const { width, height, br: brSize } = readCanvasCssSize();
   const now = performance.now();
-  const list = visibleMembers();
 
   if (galaxyFocus.mode !== "landscape") {
     const stillVisible = galaxyFocus.memberId && list.some((m) => m.entityId === galaxyFocus.memberId);
@@ -3120,11 +3168,25 @@ function drawFrame() {
 
   galaxyAvatarDrainPreload(list);
 
-  const drawOrder = [...list].sort((a, b) => {
-    const rank = (m) =>
-      m.entityId === hoveredId ? 2 : m.entityId === selected?.entityId ? 1 : 0;
-    return rank(a) - rank(b);
-  });
+  const drawBack = [];
+  const drawMid = [];
+  const drawHover = [];
+  const hid = hoveredId;
+  const selId = selected?.entityId;
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    if (m.entityId === hid) drawHover.push(m);
+    else if (m.entityId === selId) drawMid.push(m);
+    else drawBack.push(m);
+  }
+  const drawOrder = drawBack.concat(drawMid, drawHover);
+  /** Many `drawImage` scales per frame: `medium` can reduce GPU filtering cost vs `high` (dense views only). */
+  const heavySmooth = list.length > 200;
+  const prevSmoothQ =
+    typeof ctx.imageSmoothingQuality === "string" ? ctx.imageSmoothingQuality : "high";
+  if (typeof ctx.imageSmoothingQuality === "string") {
+    ctx.imageSmoothingQuality = heavySmooth ? "medium" : "high";
+  }
   drawOrder.forEach((member) => {
     const interaction = memberRingInteraction(member, selected, hoveredId);
     const radius = memberDisplayRadius(member, selected, hoveredId);
@@ -3139,6 +3201,9 @@ function drawFrame() {
       member.entityId === selected?.entityId,
     );
   });
+  if (typeof ctx.imageSmoothingQuality === "string") {
+    ctx.imageSmoothingQuality = prevSmoothQ;
+  }
 
   if (isGalaxyClusterFocus()) {
     const pin = list.find((m) => m.entityId === hoveredId) || selected;
