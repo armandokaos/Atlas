@@ -365,6 +365,25 @@ const GALAXY_TOP_SKILL_KEYS = [...__galaxySkillFreq.entries()]
   .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   .map(([k]) => k);
 
+/** Original-case label for each lowercase skill key (first-seen wins); used by autocomplete chips. */
+const __skillLabelByKey = (() => {
+  const m = new Map();
+  for (const mem of membersSourceFiltered) {
+    for (const raw of normalizeMemberSkills(mem.skills)) {
+      const t = String(raw).trim();
+      if (!t) continue;
+      const k = t.toLowerCase();
+      if (!m.has(k)) m.set(k, t);
+    }
+  }
+  return m;
+})();
+
+/** Pre-sorted skill list for the autocomplete search index (most-mentioned first). */
+const __skillSearchIndex = [...__galaxySkillFreq.entries()]
+  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  .map(([key, count]) => ({ key, label: __skillLabelByKey.get(key) || key, count }));
+
 const GALAXY_SKILL_LABEL_BY_KEY = new Map();
 GALAXY_SKILL_LABEL_BY_KEY.set(GALAXY_SKILL_OTHER, "Other skills");
 membersSourceFiltered.forEach((mem) => {
@@ -420,8 +439,10 @@ const members = membersSourceFiltered.map((member, index) => {
       linkedin: normalizeLinkedinUrl(member.socialLinks?.linkedin || ""),
     },
     color: member.name === BOSS_NAME ? BOSS_COLOR : palette[member.theme] || member.color || "#94A3B8",
-    x: 0,
-    y: 0,
+    /** Undefined → first physics step snaps to anchor target ([stepMemberLayoutPhysics] handles non-finite as "use target").
+     * Starting at (0,0) made all 534 dots crawl outward over ~60 frames at layoutPull=0.016 — visible cold-start "settling." */
+    x: undefined,
+    y: undefined,
     vx: 0,
     vy: 0,
     radius: galaxyMemberDotRadiusPx(membersSourceFiltered.length),
@@ -496,6 +517,10 @@ const state = {
   rosterPage: 1,
   starFilter: "all",
   badgeFilter: "all",
+  /** AND-filter for skills selected via search autocomplete; lowercase keys. */
+  skillFilters: new Set(),
+  /** Members picked for side-by-side comparison; max 3, in pick order. */
+  compareIds: [],
   hoveredId: null,
   selectedId: demoMember?.entityId || null,
   phase: 0,
@@ -1537,7 +1562,10 @@ const BADGE_META = {
   black: { label: "Hidden", hex: "#171717" },
 };
 
-const personalMarks = { ratings: {}, badges: {} };
+const personalMarks = { ratings: {}, badges: {}, _version: 0 };
+function bumpPersonalMarksVersion() {
+  personalMarks._version = (personalMarks._version || 0) + 1;
+}
 
 function loadPersonalMarks() {
   try {
@@ -1575,7 +1603,7 @@ async function loadBundledMarks() {
   let loaded = false;
   try {
     for (const url of DEFAULT_MARKS_JSON_URLS) {
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url);
       if (!res.ok) continue;
       const data = await res.json();
       mergeImportedMarks(data);
@@ -1604,6 +1632,8 @@ function setPersonalRating(entityId, value) {
   } else if (value >= 1 && value <= 5) {
     personalMarks.ratings[entityId] = value;
   }
+  bumpPersonalMarksVersion();
+  bumpFilterCache();
   savePersonalMarks();
   void marksCloudPersistEntity(entityId);
 }
@@ -1615,6 +1645,8 @@ function setPersonalBadge(entityId, key) {
     if (personalMarks.badges[entityId] === key) delete personalMarks.badges[entityId];
     else personalMarks.badges[entityId] = key;
   }
+  bumpPersonalMarksVersion();
+  bumpFilterCache();
   savePersonalMarks();
   void marksCloudPersistEntity(entityId);
 }
@@ -1656,6 +1688,8 @@ async function pullMarksFromCloud() {
     if (BADGE_KEYS.includes(row.badge)) personalMarks.badges[row.entity_id] = row.badge;
     else delete personalMarks.badges[row.entity_id];
   }
+  bumpPersonalMarksVersion();
+  bumpFilterCache();
   savePersonalMarks();
 }
 
@@ -1722,6 +1756,7 @@ function mergeImportedMarks(data) {
   for (const k of Object.keys(personalMarks.badges)) {
     if (!BADGE_KEYS.includes(personalMarks.badges[k])) delete personalMarks.badges[k];
   }
+  bumpPersonalMarksVersion();
 }
 
 function escapeHtml(str) {
@@ -2121,6 +2156,11 @@ const markerFilters = document.querySelector("#marker-filters");
 const detailPanel = document.querySelector("#detail-panel");
 const detailCard = document.querySelector(".detail-card");
 const rosterCard = document.querySelector(".roster-card");
+const searchSuggestEl = document.querySelector("#search-suggest");
+const skillChipsEl = document.querySelector("#spotlight-skill-chips");
+const compareTrayEl = document.querySelector("#compare-tray");
+const compareModalEl = document.querySelector("#compare-modal");
+const COMPARE_MAX = 3;
 const galaxyCardEl = document.querySelector(".galaxy-card");
 const galaxyThemePills = document.querySelector("#galaxy-theme-pills");
 const galaxyOrgPills = document.querySelector("#galaxy-org-pills");
@@ -2154,6 +2194,8 @@ function normalizeForSearch(value) {
 }
 
 function buildMemberSearchHaystack(member) {
+  const v = personalMarks._version || 0;
+  if (member._searchHayV === v && member._searchHay != null) return member._searchHay;
   const skillsHay = memberSkillsList(member).join(" ");
   const sl = member.socialLinks || {};
   const urls = [sl.x, sl.github, sl.linkedin, ...(member.spaces || [])].filter(Boolean).join(" ");
@@ -2171,16 +2213,33 @@ function buildMemberSearchHaystack(member) {
   ]
     .filter(Boolean)
     .join(" ");
-  return normalizeForSearch(raw);
+  const hay = normalizeForSearch(raw);
+  member._searchHay = hay;
+  member._searchHayV = v;
+  return hay;
+}
+
+let __queryTokensCacheRaw = " ";
+let __queryTokensCacheVal = [];
+function getQueryTokens(rawQuery) {
+  if (rawQuery === __queryTokensCacheRaw) return __queryTokensCacheVal;
+  __queryTokensCacheRaw = rawQuery;
+  const q = String(rawQuery ?? "").trim();
+  if (!q) {
+    __queryTokensCacheVal = [];
+    return __queryTokensCacheVal;
+  }
+  __queryTokensCacheVal = normalizeForSearch(q).split(/\s+/).filter(Boolean);
+  return __queryTokensCacheVal;
 }
 
 function searchQueryMatchesHaystack(normHaystack, rawQuery) {
-  const q = String(rawQuery ?? "").trim();
-  if (!q) return true;
-  const normQ = normalizeForSearch(q);
-  const tokens = normQ.split(/\s+/).filter(Boolean);
+  const tokens = getQueryTokens(rawQuery);
   if (!tokens.length) return true;
-  return tokens.every((tok) => normHaystack.includes(tok));
+  for (let i = 0; i < tokens.length; i++) {
+    if (!normHaystack.includes(tokens[i])) return false;
+  }
+  return true;
 }
 
 /** Theme + team + search (used for skill-pill counts so they never drop to 0 just because a skill filter is active). */
@@ -2210,6 +2269,17 @@ function readSkillGalaxyPillKey(el) {
   return k;
 }
 
+/** AND-match every chip in `state.skillFilters` against the member's skills. */
+function memberMatchesSkillChipFilters(member) {
+  if (!state.skillFilters || state.skillFilters.size === 0) return true;
+  const owned = new Set();
+  for (const s of memberSkillsList(member)) owned.add(String(s).trim().toLowerCase());
+  for (const k of state.skillFilters) {
+    if (!owned.has(k)) return false;
+  }
+  return true;
+}
+
 /** Skills galaxy filter: match normalized skill text; Other = cluster-only bucket. */
 function memberMatchesSkillGalaxyFilter(member) {
   if (state.skillGalaxy === "all") return true;
@@ -2229,17 +2299,30 @@ function navigateToSkillGalaxyFilter(skillKeyRaw) {
   syncUI();
 }
 
+/** Pass-scoped memo: cleared at the start of each syncUI/refreshSpotlightUI call so
+ * drawFrame's per-frame visibleMembers() lookups are O(1) until state actually changes. */
+const __filterCache = new Map();
+function bumpFilterCache() {
+  __filterCache.clear();
+}
+
 function activeMembers() {
-  return uiMembers().filter((member) => {
+  let cached = __filterCache.get("active");
+  if (cached) return cached;
+  cached = uiMembers().filter((member) => {
     if (!memberMatchesGalaxyRollupFilters(member)) return false;
+    if (!memberMatchesSkillChipFilters(member)) return false;
     return state.galaxyViewMode !== "skills" || memberMatchesSkillGalaxyFilter(member);
   });
+  __filterCache.set("active", cached);
+  return cached;
 }
 
 /** Theme pill counts must not use the active theme filter, or "All" and the selected theme show the same total. */
 function membersForThemePillCounts() {
   return uiMembers().filter((m) => {
     if (!searchQueryMatchesHaystack(buildMemberSearchHaystack(m), state.query)) return false;
+    if (!memberMatchesSkillChipFilters(m)) return false;
     if (state.galaxyViewMode === "team" && !memberBelongsToOrgGroup(m, state.orgGroup)) return false;
     if (state.galaxyViewMode === "skills" && !memberMatchesSkillGalaxyFilter(m)) return false;
     return true;
@@ -2250,6 +2333,7 @@ function membersForThemePillCounts() {
 function membersForOrgPillCounts() {
   return uiMembers().filter((m) => {
     if (!searchQueryMatchesHaystack(buildMemberSearchHaystack(m), state.query)) return false;
+    if (!memberMatchesSkillChipFilters(m)) return false;
     if (state.galaxyViewMode === "category" && state.theme !== "all" && m.theme !== state.theme) return false;
     if (state.galaxyViewMode === "skills" && !memberMatchesSkillGalaxyFilter(m)) return false;
     return true;
@@ -2274,7 +2358,11 @@ function applyPersonalFilters(list) {
 }
 
 function visibleMembers() {
-  return applyPersonalFilters(spotlightMembers(activeMembers()));
+  let cached = __filterCache.get("visible");
+  if (cached) return cached;
+  cached = applyPersonalFilters(spotlightMembers(activeMembers()));
+  __filterCache.set("visible", cached);
+  return cached;
 }
 
 function selectedMember(list = uiMembers()) {
@@ -2717,9 +2805,14 @@ function renderRoster(list) {
   const pageItems = sorted.slice(start, end);
 
   rosterGrid.innerHTML = pageItems
-    .map(
-      (member) => `
-        <article class="roster-item${member.entityId === state.selectedId ? " is-selected" : ""}" data-entity-id="${member.entityId}">
+    .map((member) => {
+      const inCompare = isInCompareSet(member.entityId);
+      const compareDisabled = !inCompare && state.compareIds.length >= COMPARE_MAX;
+      return `
+        <article class="roster-item${member.entityId === state.selectedId ? " is-selected" : ""}${inCompare ? " is-comparing" : ""}" data-entity-id="${member.entityId}">
+          <button type="button" class="compare-toggle${inCompare ? " is-on" : ""}" data-compare-toggle="${escapeHtml(member.entityId)}" aria-pressed="${inCompare ? "true" : "false"}" ${compareDisabled ? "disabled" : ""} title="${inCompare ? "Remove from compare" : compareDisabled ? "Compare is full (3 max)" : "Add to compare"}">
+            ${inCompare ? "✓ Compare" : "+ Compare"}
+          </button>
           <div class="roster-top">
             <div>
               <p class="roster-name">${escapeHtml(member.name)}</p>
@@ -2739,8 +2832,8 @@ function renderRoster(list) {
           ${renderRosterSkillsChips(member)}
           ${renderRosterConnectRow(member)}
         </article>
-      `,
-    )
+      `;
+    })
     .join("");
 
   const atFirst = state.rosterPage <= 1;
@@ -3136,6 +3229,21 @@ function drawGalaxyClusterMemberName(ctx, member, selected, hoveredId, canvasW, 
   ctx.restore();
 }
 
+/** Render-loop gating: skip rAF when tab is hidden or canvas is fully off-screen,
+ * resume on visibilitychange / IntersectionObserver. Coalesce nested schedules. */
+let __canvasOnScreen = true;
+let __rafScheduled = false;
+function scheduleDrawFrame() {
+  if (__rafScheduled) return;
+  if (typeof document !== "undefined" && document.hidden) return;
+  if (!__canvasOnScreen) return;
+  __rafScheduled = true;
+  requestAnimationFrame(() => {
+    __rafScheduled = false;
+    drawFrame();
+  });
+}
+
 function drawFrame() {
   const list = visibleMembers();
   resizeCanvas(list.length);
@@ -3153,7 +3261,7 @@ function drawFrame() {
       state.phase += GALAXY_MOTION.phaseIncrement;
       ctx.clearRect(0, 0, width, height);
       drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId);
-      requestAnimationFrame(drawFrame);
+      scheduleDrawFrame();
       return;
     }
   }
@@ -3250,7 +3358,7 @@ function drawFrame() {
   }
 
   state.phase += GALAXY_MOTION.phaseIncrement;
-  requestAnimationFrame(drawFrame);
+  scheduleDrawFrame();
 }
 
 function pickMemberFromPointer(event) {
@@ -3284,10 +3392,13 @@ function pickMemberFromPointer(event) {
 }
 
 function refreshSpotlightUI({ rebuildThemes = false } = {}) {
+  bumpFilterCache();
   const base = activeMembers();
   if (rebuildThemes) buildThemePills();
   renderSpotlightFilters(base);
   renderMarkerFilters(base);
+  renderSkillChips();
+  renderCompareTray();
   const vis = visibleMembers();
   const chosen = selectedMember(vis);
   if (chosen) state.selectedId = chosen.entityId;
@@ -3299,6 +3410,7 @@ function refreshSpotlightUI({ rebuildThemes = false } = {}) {
 }
 
 function syncUI() {
+  bumpFilterCache();
   if (galaxyFocus.mode !== "landscape") gfFinishExitToLandscape();
   if (state.orgGroup === "curators-red") state.orgGroup = "curators-orange";
   if (
@@ -3341,19 +3453,49 @@ function renderGalaxyCanvasLegend() {
 }
 
 loadPersonalMarks();
-void (async () => {
-  await loadBundledMarks();
-  await initCloudAuth();
-  resizeCanvas();
-  syncUI();
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      resizeCanvas();
-      syncUI();
-    });
+
+/** Critical path: render UI from localStorage immediately. Cloud auth + seed-marks are deferred
+ * — both can land later without blocking first paint. The previous code awaited both before any UI. */
+resizeCanvas();
+syncUI();
+scheduleDrawFrame();
+
+/** Second resize after layout settles (font metrics, scrollbars). No syncUI needed — drawFrame picks up new size. */
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => resizeCanvas());
+});
+
+/** No-op when cloud isn't configured; otherwise dynamic-imports Supabase and renders the sync panel.
+ * Either way the canvas doesn't depend on it. */
+void initCloudAuth();
+
+/** First-time visitors get curator seed marks; existing visitors already have them in localStorage.
+ * Trigger one re-render only if seed actually changed something. */
+void loadBundledMarks().then(() => {
+  if (Object.keys(personalMarks.ratings).length || Object.keys(personalMarks.badges).length) {
+    bumpFilterCache();
+    refreshSpotlightUI();
+  }
+});
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) scheduleDrawFrame();
   });
-  requestAnimationFrame(drawFrame);
-})();
+}
+
+if (canvas && typeof IntersectionObserver !== "undefined") {
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        __canvasOnScreen = entry.isIntersecting;
+      }
+      if (__canvasOnScreen) scheduleDrawFrame();
+    },
+    { threshold: 0 },
+  );
+  io.observe(canvas);
+}
 
 if (canvasWrap && typeof ResizeObserver !== "undefined") {
   const ro = new ResizeObserver(() => {
@@ -3369,9 +3511,334 @@ window.addEventListener("load", () => {
   snapSingleThemeVogelPositions(visibleMembers());
 });
 
+/** ---------------- Skill autocomplete ---------------- */
+
+let __skillSuggestList = [];
+let __skillSuggestActive = -1;
+
+function renderSkillSuggest() {
+  if (!searchSuggestEl) return;
+  const q = (state.query || "").trim().toLowerCase();
+  if (q.length < 2) {
+    __skillSuggestList = [];
+    __skillSuggestActive = -1;
+    searchSuggestEl.hidden = true;
+    searchSuggestEl.innerHTML = "";
+    return;
+  }
+  const matches = [];
+  for (const entry of __skillSearchIndex) {
+    if (state.skillFilters.has(entry.key)) continue;
+    if (entry.key.includes(q)) matches.push(entry);
+    if (matches.length >= 8) break;
+  }
+  __skillSuggestList = matches;
+  __skillSuggestActive = -1;
+  if (!matches.length) {
+    searchSuggestEl.hidden = true;
+    searchSuggestEl.innerHTML = "";
+    return;
+  }
+  searchSuggestEl.hidden = false;
+  searchSuggestEl.innerHTML = matches
+    .map(
+      (m, i) => `
+        <button type="button" class="search-suggest-item" role="option" data-skill-key="${escapeHtml(m.key)}" data-suggest-index="${i}">
+          <span class="search-suggest-label">${escapeHtml(m.label)}</span>
+          <span class="search-suggest-count">${formatNumber(m.count)}</span>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function applySkillSuggest(key) {
+  const k = String(key || "").toLowerCase();
+  if (!k) return;
+  state.skillFilters.add(k);
+  state.query = "";
+  if (searchInput) searchInput.value = "";
+  __skillSuggestList = [];
+  __skillSuggestActive = -1;
+  if (searchSuggestEl) {
+    searchSuggestEl.hidden = true;
+    searchSuggestEl.innerHTML = "";
+  }
+  state.rosterPage = 1;
+  syncUI();
+}
+
+function setSuggestActive(idx) {
+  if (!searchSuggestEl || searchSuggestEl.hidden) return;
+  const items = searchSuggestEl.querySelectorAll(".search-suggest-item");
+  if (!items.length) return;
+  const next = ((idx % items.length) + items.length) % items.length;
+  __skillSuggestActive = next;
+  items.forEach((el, i) => el.classList.toggle("is-active", i === next));
+  items[next]?.scrollIntoView({ block: "nearest" });
+}
+
+function renderSkillChips() {
+  if (!skillChipsEl) return;
+  const keys = [...state.skillFilters];
+  if (!keys.length) {
+    skillChipsEl.hidden = true;
+    skillChipsEl.innerHTML = "";
+    return;
+  }
+  skillChipsEl.hidden = false;
+  skillChipsEl.innerHTML = keys
+    .map((k) => {
+      const label = __skillLabelByKey.get(k) || k;
+      return `<button type="button" class="skill-chip" data-skill-chip="${escapeHtml(k)}" aria-label="Remove skill filter ${escapeHtml(label)}"><span class="skill-chip-label">${escapeHtml(label)}</span><span class="skill-chip-x" aria-hidden="true">×</span></button>`;
+    })
+    .join("");
+}
+
+/** mousedown (not click) so the suggest item fires before the input loses focus. */
+searchSuggestEl?.addEventListener("mousedown", (event) => {
+  const btn = event.target.closest("[data-skill-key]");
+  if (!btn) return;
+  event.preventDefault();
+  applySkillSuggest(btn.dataset.skillKey);
+});
+
+skillChipsEl?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-skill-chip]");
+  if (!btn) return;
+  state.skillFilters.delete(btn.dataset.skillChip);
+  state.rosterPage = 1;
+  syncUI();
+});
+
+document.addEventListener("click", (event) => {
+  if (!searchSuggestEl || searchSuggestEl.hidden) return;
+  if (event.target.closest("#search-suggest")) return;
+  if (event.target === searchInput) return;
+  searchSuggestEl.hidden = true;
+});
+
+/** Coalesce rapid keystrokes: at most one syncUI per frame. */
+let __searchSyncScheduled = false;
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
-  syncUI();
+  if (__searchSyncScheduled) return;
+  __searchSyncScheduled = true;
+  requestAnimationFrame(() => {
+    __searchSyncScheduled = false;
+    renderSkillSuggest();
+    syncUI();
+  });
+});
+
+searchInput.addEventListener("focus", () => {
+  if ((state.query || "").trim().length >= 2) renderSkillSuggest();
+});
+
+searchInput.addEventListener("keydown", (event) => {
+  if (!searchSuggestEl || searchSuggestEl.hidden || !__skillSuggestList.length) return;
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setSuggestActive(__skillSuggestActive + 1);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    setSuggestActive(__skillSuggestActive - 1);
+  } else if (event.key === "Enter") {
+    if (__skillSuggestActive >= 0 && __skillSuggestList[__skillSuggestActive]) {
+      event.preventDefault();
+      applySkillSuggest(__skillSuggestList[__skillSuggestActive].key);
+    }
+  } else if (event.key === "Escape") {
+    searchSuggestEl.hidden = true;
+    __skillSuggestList = [];
+    __skillSuggestActive = -1;
+  }
+});
+
+/** ---------------- Compare (side-by-side) ---------------- */
+
+function isInCompareSet(entityId) {
+  return state.compareIds.includes(entityId);
+}
+
+function toggleCompare(entityId) {
+  if (!entityId) return;
+  const i = state.compareIds.indexOf(entityId);
+  if (i >= 0) {
+    state.compareIds.splice(i, 1);
+  } else if (state.compareIds.length < COMPARE_MAX) {
+    state.compareIds.push(entityId);
+  } else {
+    return;
+  }
+  renderCompareTray();
+  renderRoster(activeMembers());
+  renderDetail(selectedMember(visibleMembers()));
+}
+
+function renderCompareTray() {
+  if (!compareTrayEl) return;
+  const ids = state.compareIds;
+  if (!ids.length) {
+    compareTrayEl.hidden = true;
+    compareTrayEl.innerHTML = "";
+    return;
+  }
+  const byId = new Map(members.map((m) => [m.entityId, m]));
+  const picks = ids.map((id) => byId.get(id)).filter(Boolean);
+  compareTrayEl.hidden = false;
+  compareTrayEl.innerHTML = `
+    <div class="compare-tray-inner">
+      <div class="compare-tray-avatars">
+        ${picks
+          .map(
+            (m) => `
+              <button type="button" class="compare-tray-avatar" data-compare-tray-remove="${escapeHtml(m.entityId)}" title="Remove ${escapeHtml(m.name)}" aria-label="Remove ${escapeHtml(m.name)} from compare">
+                ${renderAvatar(m, "avatar-mini")}
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+      <span class="compare-tray-count">${picks.length} / ${COMPARE_MAX}</span>
+      <button type="button" class="compare-tray-btn compare-tray-btn--open" id="compare-tray-open" ${picks.length < 2 ? "disabled" : ""}>Compare</button>
+      <button type="button" class="compare-tray-btn compare-tray-btn--clear" id="compare-tray-clear">Clear</button>
+    </div>
+  `;
+}
+
+compareTrayEl?.addEventListener("click", (event) => {
+  const removeBtn = event.target.closest("[data-compare-tray-remove]");
+  if (removeBtn) {
+    toggleCompare(removeBtn.dataset.compareTrayRemove);
+    return;
+  }
+  if (event.target.closest("#compare-tray-clear")) {
+    state.compareIds = [];
+    renderCompareTray();
+    renderRoster(activeMembers());
+    renderDetail(selectedMember(visibleMembers()));
+    return;
+  }
+  if (event.target.closest("#compare-tray-open")) {
+    openCompareModal();
+  }
+});
+
+function compareModalKeydownHandler(event) {
+  if (event.key === "Escape") closeCompareModal();
+}
+
+function openCompareModal() {
+  if (!compareModalEl) return;
+  const byId = new Map(members.map((m) => [m.entityId, m]));
+  const picks = state.compareIds.map((id) => byId.get(id)).filter(Boolean);
+  if (picks.length < 2) return;
+  compareModalEl.hidden = false;
+  compareModalEl.innerHTML = `
+    <div class="compare-modal-backdrop" data-compare-close></div>
+    <div class="compare-modal-shell" role="dialog" aria-modal="true" aria-label="Compare profiles">
+      <header class="compare-modal-header">
+        <h2>Compare profiles</h2>
+        <button type="button" class="compare-modal-close" data-compare-close aria-label="Close compare view">×</button>
+      </header>
+      <div class="compare-modal-grid" data-cols="${picks.length}">
+        ${picks.map(renderCompareCard).join("")}
+      </div>
+    </div>
+  `;
+  document.addEventListener("keydown", compareModalKeydownHandler);
+}
+
+function closeCompareModal() {
+  if (!compareModalEl) return;
+  compareModalEl.hidden = true;
+  compareModalEl.innerHTML = "";
+  document.removeEventListener("keydown", compareModalKeydownHandler);
+}
+
+function renderCompareCard(member) {
+  const teams = memberOrgGroupKeys(member).map((k) => ORG_GROUP_LABEL_BY_KEY[k] || k).join(" · ") || "—";
+  const skills = (member.skills || []).length
+    ? (member.skills || []).map((s) => `<span class="compare-skill">${escapeHtml(s)}</span>`).join("")
+    : `<span class="compare-empty">No skills listed</span>`;
+  const sl = member.socialLinks || {};
+  const links = [];
+  if (sl.x) links.push(`<a href="${escapeHtml(sl.x)}" target="_blank" rel="noopener noreferrer">X</a>`);
+  if (sl.github) links.push(`<a href="${escapeHtml(sl.github)}" target="_blank" rel="noopener noreferrer">GitHub</a>`);
+  if (sl.linkedin) links.push(`<a href="${escapeHtml(sl.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`);
+  for (const sp of (member.spaces || []).filter(Boolean)) {
+    links.push(`<a href="${escapeHtml(sp)}" target="_blank" rel="noopener noreferrer">Geo space</a>`);
+  }
+  return `
+    <article class="compare-card" data-entity-id="${escapeHtml(member.entityId)}">
+      <header class="compare-card-head">
+        <div class="compare-card-avatar" style="background:${member.color}; box-shadow:0 0 28px ${member.color}33;">
+          ${renderAvatar(member, "avatar-medium")}
+        </div>
+        <div class="compare-card-meta">
+          <h3 class="compare-card-name">${escapeHtml(member.name)}</h3>
+          <p class="compare-card-theme">${escapeHtml(member.theme || "—")}</p>
+          <p class="compare-card-team">${escapeHtml(teams)}</p>
+        </div>
+      </header>
+      <section class="compare-card-section">
+        <p class="compare-card-section-title">Bio</p>
+        <p class="compare-card-bio">${escapeHtml(member.description || "—")}</p>
+      </section>
+      <section class="compare-card-section">
+        <p class="compare-card-section-title">Skills</p>
+        <div class="compare-card-skills">${skills}</div>
+      </section>
+      <section class="compare-card-section">
+        <p class="compare-card-section-title">Links</p>
+        <div class="compare-card-links">${links.length ? links.join(" · ") : "—"}</div>
+      </section>
+    </article>
+  `;
+}
+
+compareModalEl?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-compare-close]")) closeCompareModal();
+});
+
+/** ---------------- CSV export ---------------- */
+
+function buildRosterCsv(list) {
+  const headers = ["entityId", "name", "theme", "teams", "skills", "description", "spaces", "x", "github", "linkedin"];
+  const escapeField = (v) => {
+    const s = String(v == null ? "" : v).replace(/"/g, '""');
+    return /[",\n\r]/.test(s) ? `"${s}"` : s;
+  };
+  const rows = list.map((m) => [
+    m.entityId || "",
+    m.name || "",
+    m.theme || "",
+    memberOrgGroupKeys(m).map((k) => ORG_GROUP_LABEL_BY_KEY[k] || k).join("; "),
+    (m.skills || []).join("; "),
+    m.description || "",
+    (m.spaces || []).join(" "),
+    m.socialLinks?.x || "",
+    m.socialLinks?.github || "",
+    m.socialLinks?.linkedin || "",
+  ]);
+  return [headers, ...rows].map((r) => r.map(escapeField).join(",")).join("\n");
+}
+
+document.querySelector("#export-csv-btn")?.addEventListener("click", () => {
+  const list = visibleMembers();
+  if (!list.length) return;
+  /** UTF-8 BOM keeps Excel from mangling accented names. */
+  const blob = new Blob(["﻿" + buildRosterCsv(list)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `geo-atlas-roster-${date}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 });
 
 function onThemePillClick(event) {
@@ -3532,6 +3999,13 @@ window.addEventListener("keydown", (event) => {
 
 if (rosterGrid) {
   rosterGrid.addEventListener("click", (event) => {
+    const compareBtn = event.target.closest("[data-compare-toggle]");
+    if (compareBtn) {
+      if (!compareBtn.disabled) toggleCompare(compareBtn.dataset.compareToggle);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const skillBtn = event.target.closest("[data-skill-nav]");
     if (skillBtn && rosterGrid.contains(skillBtn)) {
       const raw = skillBtn.getAttribute("data-skill-nav");

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-cache" />
     <title>Geo Atlas</title>
-    <link rel="stylesheet" href="./styles.css?v=40" />
+    <link rel="stylesheet" href="./styles.css?v=43" />
   </head>
   <body>
     <div class="page-shell">
@@ -59,6 +59,9 @@
             <p class="card-kicker">Spotlight</p>
             <h2>Profiles to explore</h2>
             <p class="roster-lead">Search, filter, and browse the strongest profiles in one place.</p>
+            <div class="roster-actions">
+              <button type="button" class="roster-action-btn" id="export-csv-btn">Export CSV</button>
+            </div>
           </div>
           <div class="spotlight-panel">
             <label class="search-wrap spotlight-search">
@@ -66,10 +69,14 @@
               <input
                 id="search-input"
                 type="search"
-                placeholder="Name, bio, keyword..."
+                placeholder="Name, bio, skill, keyword..."
                 autocomplete="off"
+                aria-autocomplete="list"
+                aria-controls="search-suggest"
               />
+              <div class="search-suggest" id="search-suggest" role="listbox" hidden></div>
             </label>
+            <div class="spotlight-skill-chips" id="spotlight-skill-chips" aria-label="Active skill filters" hidden></div>
             <div class="spotlight-theme-row">
               <span class="spotlight-theme-label">Category</span>
               <div class="theme-pills theme-pills--spotlight" id="spotlight-theme-strip" aria-label="Filter by category"></div>
@@ -97,8 +104,10 @@
       </section>
     </div>
 
+    <div class="compare-tray" id="compare-tray" hidden></div>
+    <div class="compare-modal" id="compare-modal" hidden></div>
     <script src="./cloud-config.js?v=14"></script>
     <script src="./members-data.js?v=22"></script>
-    <script src="./app.js?v=118"></script>
+    <script src="./app.js?v=121"></script>
   </body>
 </html>
