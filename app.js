@@ -1556,8 +1556,9 @@ const BADGE_META = {
   purple: { label: "Content team", hex: "#9333ea" },
   pink: { label: "Curators elite", hex: "#db2777" },
   red: { label: "Curators Orange", hex: "#ea580c" },
-  green: { label: "Curators green", hex: "#16a34a" },
-  yellow: { label: "Curators yellow", hex: "#ca8a04" },
+  /** Green/yellow renamed to Active/Inactive per atlas-priority.md (temporary categorization solution). */
+  green: { label: "Curators Active", hex: "#007a3f" },
+  yellow: { label: "Curators Inactive", hex: "#fff3c2" },
   orange: { label: "Curators grey", hex: "#6b7280" },
   black: { label: "Hidden", hex: "#171717" },
 };
@@ -1599,6 +1600,25 @@ function savePersonalMarks() {
   }
 }
 
+/** Seed-only: fill keys that aren't already in personalMarks so the bundled JSON acts as a starting point,
+ * not an overwrite. Without this, every page refresh would clobber in-session marks with the April 21 snapshot. */
+function seedFromImportedMarks(data) {
+  if (!data || typeof data !== "object") return;
+  if (data.ratings && typeof data.ratings === "object") {
+    for (const [k, raw] of Object.entries(data.ratings)) {
+      if (personalMarks.ratings[k] != null) continue;
+      const v = typeof raw === "string" ? Number(raw) : raw;
+      if (typeof v === "number" && v >= 1 && v <= 5) personalMarks.ratings[k] = v;
+    }
+  }
+  if (data.badges && typeof data.badges === "object") {
+    for (const [k, v] of Object.entries(data.badges)) {
+      if (personalMarks.badges[k] != null) continue;
+      if (BADGE_KEYS.includes(v)) personalMarks.badges[k] = v;
+    }
+  }
+}
+
 async function loadBundledMarks() {
   let loaded = false;
   try {
@@ -1606,10 +1626,13 @@ async function loadBundledMarks() {
       const res = await fetch(url);
       if (!res.ok) continue;
       const data = await res.json();
-      mergeImportedMarks(data);
+      seedFromImportedMarks(data);
       loaded = true;
     }
-    if (loaded) savePersonalMarks();
+    if (loaded) {
+      bumpPersonalMarksVersion();
+      savePersonalMarks();
+    }
   } catch {
     /* optional seed file; ignore if unavailable */
   }
@@ -3805,23 +3828,28 @@ compareModalEl?.addEventListener("click", (event) => {
 /** ---------------- CSV export ---------------- */
 
 function buildRosterCsv(list) {
-  const headers = ["entityId", "name", "theme", "teams", "skills", "description", "spaces", "x", "github", "linkedin"];
+  const headers = ["entityId", "name", "theme", "teams", "category", "skills", "description", "spaces", "x", "github", "linkedin"];
   const escapeField = (v) => {
     const s = String(v == null ? "" : v).replace(/"/g, '""');
     return /[",\n\r]/.test(s) ? `"${s}"` : s;
   };
-  const rows = list.map((m) => [
-    m.entityId || "",
-    m.name || "",
-    m.theme || "",
-    memberOrgGroupKeys(m).map((k) => ORG_GROUP_LABEL_BY_KEY[k] || k).join("; "),
-    (m.skills || []).join("; "),
-    m.description || "",
-    (m.spaces || []).join(" "),
-    m.socialLinks?.x || "",
-    m.socialLinks?.github || "",
-    m.socialLinks?.linkedin || "",
-  ]);
+  const rows = list.map((m) => {
+    const badge = getPersonalBadge(m.entityId);
+    const category = badge && BADGE_META[badge] ? BADGE_META[badge].label : "";
+    return [
+      m.entityId || "",
+      m.name || "",
+      m.theme || "",
+      memberOrgGroupKeys(m).map((k) => ORG_GROUP_LABEL_BY_KEY[k] || k).join("; "),
+      category,
+      (m.skills || []).join("; "),
+      m.description || "",
+      (m.spaces || []).join(" "),
+      m.socialLinks?.x || "",
+      m.socialLinks?.github || "",
+      m.socialLinks?.linkedin || "",
+    ];
+  });
   return [headers, ...rows].map((r) => r.map(escapeField).join(",")).join("\n");
 }
 

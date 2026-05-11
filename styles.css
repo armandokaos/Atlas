@@ -1651,7 +1651,7 @@ h1 {
 }
 
 .pastille-dot--green {
-  background: #16a34a;
+  background: #007a3f;
 }
 
 .pastille-dot--red {
@@ -1659,7 +1659,9 @@ h1 {
 }
 
 .pastille-dot--yellow {
-  background: #eab308;
+  background: #fff3c2;
+  /** Doc value (#fff3c2) is very pale — outer ring keeps the dot visible against white card backgrounds. */
+  box-shadow: 0 0 0 1px rgba(180, 145, 30, 0.55), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .pastille-dot--purple {
