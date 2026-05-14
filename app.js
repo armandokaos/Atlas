@@ -1847,6 +1847,23 @@ function renderSocialIconButtons(member, btnClass) {
         return `<a class="${btnClass} ${btnClass}--github follower-chip" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}" title="GitHub — ${count} followers">${socialIcons.github}<span class="follower-chip-count" aria-hidden="true">${count}</span></a>`;
       }
 
+      if (key === "linkedin" && member.liStatus) {
+        const tip = "LinkedIn account unavailable";
+        if (isDetail) {
+          return `<span class="soc-unavail soc-unavail--detail" title="${tip}" role="img" aria-label="${tip}">${socialIcons.linkedin}<span class="soc-unavail-label">Unavailable</span></span>`;
+        }
+        return `<span class="soc-unavail soc-unavail--roster" title="${tip}" role="img" aria-label="${tip}">${socialIcons.linkedin}</span>`;
+      }
+
+      if (key === "linkedin" && Number.isFinite(member.liFollowers)) {
+        const count = formatFollowers(member.liFollowers);
+        const ariaLabel = escapeHtml(`LinkedIn, ${member.liFollowers.toLocaleString()} followers (opens in a new tab)`);
+        if (isDetail) {
+          return `<a class="${btnClass} ${btnClass}--linkedin follower-pill" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}">${socialIcons.linkedin}<span class="follower-pill-stats" aria-hidden="true"><b class="follower-pill-count">${count}</b><span class="follower-pill-label">followers</span></span></a>`;
+        }
+        return `<a class="${btnClass} ${btnClass}--linkedin follower-chip" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}" title="LinkedIn — ${count} followers">${socialIcons.linkedin}<span class="follower-chip-count" aria-hidden="true">${count}</span></a>`;
+      }
+
       const label = escapeHtml(`${title} (opens in a new tab)`);
       return `<a class="${btnClass} ${btnClass}--${key}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${escapeHtml(title)}">${socialIcons[key]}</a>`;
     })
@@ -2454,13 +2471,14 @@ function spotlightMembers(list) {
 }
 
 function memberHasFollowerData(member) {
-  return Number.isFinite(member.xFollowers) || Number.isFinite(member.ghFollowers);
+  return Number.isFinite(member.xFollowers) || Number.isFinite(member.ghFollowers) || Number.isFinite(member.liFollowers);
 }
 
 function memberTotalFollowers(member) {
   let n = 0;
   if (Number.isFinite(member.xFollowers)) n += member.xFollowers;
   if (Number.isFinite(member.ghFollowers)) n += member.ghFollowers;
+  if (Number.isFinite(member.liFollowers)) n += member.liFollowers;
   return n;
 }
 

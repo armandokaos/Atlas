@@ -108,6 +108,19 @@ async function fetchBatch(usernames, token) {
   return { counts, statuses };
 }
 
+async function fetchLinkedinFollowers(profileUrl, apiKey) {
+  const url = `https://enrichlayer.com/api/v2/profile?profile_url=${encodeURIComponent(profileUrl)}&use_cache=if-present`;
+  const { status, body } = await httpsGet(url, {
+    Authorization: `Bearer ${apiKey}`,
+    'User-Agent': 'GeoAtlasFetcher/1.0',
+  });
+  if (status === 200) return { followers: body.follower_count ?? null, status: null };
+  if (status === 404) return { followers: null, status: 'deleted' };
+  if (status === 429) throw new Error('Rate limited by EnrichLayer');
+  if (status === 400) return { followers: null, status: 'invalid' };
+  throw new Error(`EnrichLayer HTTP ${status}`);
+}
+
 async function fetchGithubUser(username, token) {
   const url = `https://api.github.com/users/${encodeURIComponent(username)}`;
   const headers = {
@@ -245,6 +258,55 @@ async function main() {
 
     data.summary.ghFollowersFetchedAt = new Date().toISOString().slice(0, 10);
     console.log(`\nGitHub: ${ghUpdated} updated, ${ghNotFound} not found`);
+  }
+
+  // ── LinkedIn followers (Proxycurl) ─────────────────────────────────────────
+
+  const proxycurlKey = process.env.PROXYCURL_API_KEY;
+  if (!proxycurlKey) {
+    console.log('\nSkipping LinkedIn: PROXYCURL_API_KEY not set in .env');
+  } else {
+    const liMembers = [];
+    for (let i = 0; i < data.members.length; i++) {
+      const raw = data.members[i].socialLinks?.linkedin || '';
+      delete data.members[i].liFollowers;
+      delete data.members[i].liStatus;
+      if (!raw) continue;
+      try {
+        const u = new URL(raw);
+        const validHost = u.hostname.includes('linkedin.com');
+        const validPath = u.pathname.startsWith('/in/') || u.pathname.startsWith('/company/');
+        if (validHost && validPath) liMembers.push({ idx: i, url: raw });
+      } catch { /* skip malformed URLs */ }
+    }
+
+    console.log(`\nLinkedIn: ${liMembers.length} accounts`);
+    let liUpdated = 0;
+    let liNotFound = 0;
+
+    for (let i = 0; i < liMembers.length; i++) {
+      const { idx, url } = liMembers[i];
+      const name = data.members[idx].name;
+      process.stdout.write(`  ${i + 1}/${liMembers.length} ${name}... `);
+      try {
+        const { followers, status } = await fetchLinkedinFollowers(url, proxycurlKey);
+        if (followers != null) {
+          data.members[idx].liFollowers = followers;
+          liUpdated++;
+          console.log(`✓ ${followers}`);
+        } else {
+          data.members[idx].liStatus = status || 'unavailable';
+          liNotFound++;
+          console.log(`! ${status}`);
+        }
+      } catch (err) {
+        console.log(`✗ ${err.message}`);
+      }
+      if (i < liMembers.length - 1) await sleep(300);
+    }
+
+    data.summary.liFollowersFetchedAt = new Date().toISOString().slice(0, 10);
+    console.log(`\nLinkedIn: ${liUpdated} updated, ${liNotFound} not found/unavailable`);
   }
 
   // ── Write ───────────────────────────────────────────────────────────────────
