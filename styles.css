@@ -1217,27 +1217,99 @@ h1 {
   color: #0a66c2;
 }
 
-.social-x-group {
+/* ── X follower pill (detail panel) ─────────────────────────────────────── */
+
+.x-follower-pill {
+  width: auto;
+  padding: 0 15px 0 11px;
   display: inline-flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 10px;
 }
 
-.social-x-count {
-  font-size: 0.68rem;
+.x-follower-pill-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.x-follower-pill-count {
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  color: rgba(42, 38, 51, 0.52);
-  white-space: nowrap;
+  letter-spacing: -0.025em;
+  color: rgba(14, 12, 20, 0.88);
+}
+
+.x-follower-pill-label {
+  font-size: 0.615rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(42, 38, 51, 0.42);
+}
+
+/* ── X follower chip (roster card) ──────────────────────────────────────── */
+
+.x-follower-chip {
+  width: auto;
+  padding: 0 9px 0 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.x-follower-chip-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: rgba(20, 18, 28, 0.72);
   line-height: 1;
 }
 
-.social-x-gone {
-  opacity: 0.25;
+/* ── Suspended / deleted account ────────────────────────────────────────── */
+
+.x-unavail {
+  display: inline-flex;
+  align-items: center;
   cursor: default;
   pointer-events: none;
-  text-decoration: none;
+}
+
+.x-unavail--detail {
+  gap: 7px;
+  height: 48px;
+  padding: 0 14px 0 11px;
+  border-radius: 14px;
+  background: rgba(248, 246, 252, 0.5);
+  border: 1px solid rgba(165, 115, 241, 0.08);
+  color: rgba(42, 38, 51, 0.3);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.x-unavail--detail svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.x-unavail--roster {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(165, 115, 241, 0.07);
+  color: rgba(42, 38, 51, 0.22);
+}
+
+.x-unavail--roster svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .roster-pagination {

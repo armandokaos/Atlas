@@ -1803,23 +1803,34 @@ function accentRgbParts(hex) {
 }
 
 function renderSocialIconButtons(member, btnClass) {
+  const isDetail = btnClass === "detail-social-btn";
   return (["x", "github", "linkedin"])
     .map((key) => {
       const rawHref = member.socialLinks?.[key];
       if (!rawHref) return "";
       const href = escapeHtml(ensureHttps(String(rawHref).trim()));
       const title = platformLabels[key] || key;
-      const label = escapeHtml(`${title} (opens in a new tab)`);
+
       if (key === "x" && member.xStatus) {
-        const tip = member.xStatus === "suspended" ? "Account suspended" : "Account deleted";
-        return `<span class="${btnClass} ${btnClass}--x social-x-gone" title="${tip}" aria-label="${tip}" role="img">${socialIcons[key]}</span>`;
+        const statusLabel = member.xStatus === "suspended" ? "Suspended" : "Deleted";
+        const tip = `X account ${statusLabel.toLowerCase()}`;
+        if (isDetail) {
+          return `<span class="x-unavail x-unavail--detail" title="${tip}" role="img" aria-label="${tip}">${socialIcons.x}<span class="x-unavail-label">${statusLabel}</span></span>`;
+        }
+        return `<span class="x-unavail x-unavail--roster" title="${tip}" role="img" aria-label="${tip}">${socialIcons.x}</span>`;
       }
-      const btn = `<a class="${btnClass} ${btnClass}--${key}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${escapeHtml(title)}">${socialIcons[key]}</a>`;
+
       if (key === "x" && Number.isFinite(member.xFollowers)) {
         const count = formatFollowers(member.xFollowers);
-        return `<span class="social-x-group"><span class="social-x-count" aria-label="${member.xFollowers} followers">${count}</span>${btn}</span>`;
+        const ariaLabel = escapeHtml(`X, ${member.xFollowers.toLocaleString()} followers (opens in a new tab)`);
+        if (isDetail) {
+          return `<a class="${btnClass} ${btnClass}--x x-follower-pill" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}">${socialIcons.x}<span class="x-follower-pill-stats" aria-hidden="true"><b class="x-follower-pill-count">${count}</b><span class="x-follower-pill-label">followers</span></span></a>`;
+        }
+        return `<a class="${btnClass} ${btnClass}--x x-follower-chip" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}" title="X — ${count} followers">${socialIcons.x}<span class="x-follower-chip-count" aria-hidden="true">${count}</span></a>`;
       }
-      return btn;
+
+      const label = escapeHtml(`${title} (opens in a new tab)`);
+      return `<a class="${btnClass} ${btnClass}--${key}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${escapeHtml(title)}">${socialIcons[key]}</a>`;
     })
     .filter(Boolean)
     .join("");
