@@ -2482,6 +2482,22 @@ function memberTotalFollowers(member) {
   return n;
 }
 
+// When a platform filter is active, sort by that platform's followers only.
+// Falls back to total when filter is "all".
+function memberSortFollowers(member) {
+  if (state.rosterFilter === "x") return Number.isFinite(member.xFollowers) ? member.xFollowers : -1;
+  if (state.rosterFilter === "github") return Number.isFinite(member.ghFollowers) ? member.ghFollowers : -1;
+  if (state.rosterFilter === "linkedin") return Number.isFinite(member.liFollowers) ? member.liFollowers : -1;
+  return memberTotalFollowers(member);
+}
+
+function memberSortHasFollowerData(member) {
+  if (state.rosterFilter === "x") return Number.isFinite(member.xFollowers);
+  if (state.rosterFilter === "github") return Number.isFinite(member.ghFollowers);
+  if (state.rosterFilter === "linkedin") return Number.isFinite(member.liFollowers);
+  return memberHasFollowerData(member);
+}
+
 function rosterPinOrderIndex(name) {
   const i = ROSTER_PAGE1_PIN_ORDER.indexOf(name);
   return i === -1 ? 1000 : i;
@@ -2499,11 +2515,11 @@ function sortedSpotlightMembers(list) {
   const filtered = [...applyPersonalFilters(spotlightMembers(list))];
   if (state.followerSort !== "none") {
     return filtered.sort((a, b) => {
-      const hasA = memberHasFollowerData(a);
-      const hasB = memberHasFollowerData(b);
+      const hasA = memberSortHasFollowerData(a);
+      const hasB = memberSortHasFollowerData(b);
       if (hasA !== hasB) return hasA ? -1 : 1;
       if (!hasA) return a.name.localeCompare(b.name);
-      const diff = memberTotalFollowers(b) - memberTotalFollowers(a);
+      const diff = memberSortFollowers(b) - memberSortFollowers(a);
       return state.followerSort === "most" ? diff : -diff;
     });
   }
