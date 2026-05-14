@@ -39,7 +39,20 @@ function loadEnv() {
   }
 }
 
-// ── X username extraction ────────────────────────────────────────────────────
+// ── Username extraction ──────────────────────────────────────────────────────
+
+function usernameFromGithubUrl(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  try {
+    const url = new URL(s.startsWith('http') ? s : `https://${s}`);
+    if (!['github.com', 'www.github.com'].includes(url.hostname)) return null;
+    const m = url.pathname.replace(/^\/+/, '').match(/^([A-Za-z0-9_.-]+)(?:[/?#].*)?$/);
+    return m && m[1] ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
 
 function usernameFromXUrl(raw) {
   if (!raw) return null;
@@ -93,6 +106,19 @@ async function fetchBatch(usernames, token) {
     if (err.detail) console.warn(`  ! ${err.detail}`);
   }
   return { counts, statuses };
+}
+
+async function fetchGithubUser(username, token) {
+  const url = `https://api.github.com/users/${encodeURIComponent(username)}`;
+  const headers = {
+    'User-Agent': 'GeoAtlasFetcher/1.0',
+    'Accept': 'application/vnd.github.v3+json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const { status, body } = await httpsGet(url, headers);
+  if (status === 200) return { followers: body.followers, status: null };
+  if (status === 404) return { followers: null, status: 'deleted' };
+  throw new Error(`GitHub HTTP ${status}`);
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -174,10 +200,59 @@ async function main() {
   data.summary = data.summary || {};
   data.summary.xFollowersFetchedAt = new Date().toISOString().slice(0, 10);
 
+  // ── GitHub followers ────────────────────────────────────────────────────────
+
+  const ghToken = process.env.GITHUB_TOKEN;
+  if (!ghToken) {
+    console.log('\nSkipping GitHub: GITHUB_TOKEN not set in .env');
+  } else {
+    const byGhUsername = new Map();
+    for (let i = 0; i < data.members.length; i++) {
+      const username = usernameFromGithubUrl(data.members[i].socialLinks?.github);
+      delete data.members[i].ghFollowers;
+      delete data.members[i].ghStatus;
+      if (!username) continue;
+      const key = username.toLowerCase();
+      if (!byGhUsername.has(key)) byGhUsername.set(key, []);
+      byGhUsername.get(key).push(i);
+    }
+
+    const ghUsernames = [...byGhUsername.keys()];
+    console.log(`\nGitHub: ${ghUsernames.length} accounts`);
+
+    let ghUpdated = 0;
+    let ghNotFound = 0;
+    for (let i = 0; i < ghUsernames.length; i++) {
+      const username = ghUsernames[i];
+      process.stdout.write(`  ${i + 1}/${ghUsernames.length} @${username}... `);
+      try {
+        const { followers, status } = await fetchGithubUser(username, ghToken);
+        for (const idx of byGhUsername.get(username) || []) {
+          if (followers != null) {
+            data.members[idx].ghFollowers = followers;
+            ghUpdated++;
+          } else if (status) {
+            data.members[idx].ghStatus = status;
+            ghNotFound++;
+          }
+        }
+        console.log(followers != null ? `✓ ${followers}` : `! ${status}`);
+      } catch (err) {
+        console.log(`✗ ${err.message}`);
+      }
+      if (i < ghUsernames.length - 1) await sleep(250);
+    }
+
+    data.summary.ghFollowersFetchedAt = new Date().toISOString().slice(0, 10);
+    console.log(`\nGitHub: ${ghUpdated} updated, ${ghNotFound} not found`);
+  }
+
+  // ── Write ───────────────────────────────────────────────────────────────────
+
   fs.writeFileSync(MEMBERS_DATA_PATH, `window.GEO_CURATORS_DATA = ${JSON.stringify(data)};`);
   bumpMembersDataVersion();
 
-  console.log(`\n✓ Done: ${updated} updated, ${notFound} not found/invalid`);
+  console.log(`\n✓ X: ${updated} updated, ${notFound} not found/invalid`);
   console.log('  members-data.js written');
 }
 

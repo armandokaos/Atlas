@@ -1219,7 +1219,7 @@ h1 {
 
 /* ── X follower pill (detail panel) ─────────────────────────────────────── */
 
-.x-follower-pill {
+.follower-pill {
   width: auto;
   padding: 0 15px 0 11px;
   display: inline-flex;
@@ -1227,21 +1227,21 @@ h1 {
   gap: 10px;
 }
 
-.x-follower-pill-stats {
+.follower-pill-stats {
   display: flex;
   flex-direction: column;
   gap: 1px;
   line-height: 1.2;
 }
 
-.x-follower-pill-count {
+.follower-pill-count {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.025em;
   color: rgba(14, 12, 20, 0.88);
 }
 
-.x-follower-pill-label {
+.follower-pill-label {
   font-size: 0.615rem;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -1251,7 +1251,7 @@ h1 {
 
 /* ── X follower chip (roster card) ──────────────────────────────────────── */
 
-.x-follower-chip {
+.follower-chip {
   width: auto;
   padding: 0 9px 0 7px;
   display: inline-flex;
@@ -1259,7 +1259,7 @@ h1 {
   gap: 5px;
 }
 
-.x-follower-chip-count {
+.follower-chip-count {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: -0.015em;
@@ -1269,14 +1269,14 @@ h1 {
 
 /* ── Suspended / deleted account ────────────────────────────────────────── */
 
-.x-unavail {
+.soc-unavail {
   display: inline-flex;
   align-items: center;
   cursor: default;
   pointer-events: none;
 }
 
-.x-unavail--detail {
+.soc-unavail--detail {
   gap: 7px;
   height: 48px;
   padding: 0 14px 0 11px;
@@ -1289,14 +1289,14 @@ h1 {
   letter-spacing: 0.01em;
 }
 
-.x-unavail--detail svg {
+.soc-unavail--detail svg {
   width: 14px;
   height: 14px;
   fill: currentColor;
   flex-shrink: 0;
 }
 
-.x-unavail--roster {
+.soc-unavail--roster {
   width: 36px;
   height: 36px;
   border-radius: 11px;
@@ -1306,10 +1306,57 @@ h1 {
   color: rgba(42, 38, 51, 0.22);
 }
 
-.x-unavail--roster svg {
+.soc-unavail--roster svg {
   width: 14px;
   height: 14px;
   fill: currentColor;
+}
+
+/* ── Follower sort control ──────────────────────────────────────────────── */
+
+.follower-sort-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(165, 115, 241, 0.1);
+}
+
+.follower-sort-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: rgba(42, 38, 51, 0.5);
+  white-space: nowrap;
+}
+
+.follower-sort-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.follower-sort-btn {
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 115, 241, 0.16);
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(42, 38, 51, 0.7);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.follower-sort-btn:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(116, 71, 245, 0.28);
+  color: rgba(42, 38, 51, 0.9);
+}
+
+.follower-sort-btn.active {
+  background: rgba(116, 71, 245, 0.1);
+  border-color: rgba(116, 71, 245, 0.32);
+  color: #5c38d9;
 }
 
 .roster-pagination {

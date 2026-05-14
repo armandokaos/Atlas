@@ -517,6 +517,7 @@ const state = {
   rosterPage: 1,
   starFilter: "all",
   badgeFilter: "all",
+  followerSort: "none",
   /** AND-filter for skills selected via search autocomplete; lowercase keys. */
   skillFilters: new Set(),
   /** Members picked for side-by-side comparison; max 3, in pick order. */
@@ -1815,18 +1816,35 @@ function renderSocialIconButtons(member, btnClass) {
         const statusLabel = member.xStatus === "suspended" ? "Suspended" : "Deleted";
         const tip = `X account ${statusLabel.toLowerCase()}`;
         if (isDetail) {
-          return `<span class="x-unavail x-unavail--detail" title="${tip}" role="img" aria-label="${tip}">${socialIcons.x}<span class="x-unavail-label">${statusLabel}</span></span>`;
+          return `<span class="soc-unavail soc-unavail--detail" title="${tip}" role="img" aria-label="${tip}">${socialIcons.x}<span class="soc-unavail-label">${statusLabel}</span></span>`;
         }
-        return `<span class="x-unavail x-unavail--roster" title="${tip}" role="img" aria-label="${tip}">${socialIcons.x}</span>`;
+        return `<span class="soc-unavail soc-unavail--roster" title="${tip}" role="img" aria-label="${tip}">${socialIcons.x}</span>`;
       }
 
       if (key === "x" && Number.isFinite(member.xFollowers)) {
         const count = formatFollowers(member.xFollowers);
         const ariaLabel = escapeHtml(`X, ${member.xFollowers.toLocaleString()} followers (opens in a new tab)`);
         if (isDetail) {
-          return `<a class="${btnClass} ${btnClass}--x x-follower-pill" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}">${socialIcons.x}<span class="x-follower-pill-stats" aria-hidden="true"><b class="x-follower-pill-count">${count}</b><span class="x-follower-pill-label">followers</span></span></a>`;
+          return `<a class="${btnClass} ${btnClass}--x follower-pill" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}">${socialIcons.x}<span class="follower-pill-stats" aria-hidden="true"><b class="follower-pill-count">${count}</b><span class="follower-pill-label">followers</span></span></a>`;
         }
-        return `<a class="${btnClass} ${btnClass}--x x-follower-chip" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}" title="X — ${count} followers">${socialIcons.x}<span class="x-follower-chip-count" aria-hidden="true">${count}</span></a>`;
+        return `<a class="${btnClass} ${btnClass}--x follower-chip" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}" title="X — ${count} followers">${socialIcons.x}<span class="follower-chip-count" aria-hidden="true">${count}</span></a>`;
+      }
+
+      if (key === "github" && member.ghStatus) {
+        const tip = "GitHub account unavailable";
+        if (isDetail) {
+          return `<span class="soc-unavail soc-unavail--detail" title="${tip}" role="img" aria-label="${tip}">${socialIcons.github}<span class="soc-unavail-label">Unavailable</span></span>`;
+        }
+        return `<span class="soc-unavail soc-unavail--roster" title="${tip}" role="img" aria-label="${tip}">${socialIcons.github}</span>`;
+      }
+
+      if (key === "github" && Number.isFinite(member.ghFollowers)) {
+        const count = formatFollowers(member.ghFollowers);
+        const ariaLabel = escapeHtml(`GitHub, ${member.ghFollowers.toLocaleString()} followers (opens in a new tab)`);
+        if (isDetail) {
+          return `<a class="${btnClass} ${btnClass}--github follower-pill" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}">${socialIcons.github}<span class="follower-pill-stats" aria-hidden="true"><b class="follower-pill-count">${count}</b><span class="follower-pill-label">followers</span></span></a>`;
+        }
+        return `<a class="${btnClass} ${btnClass}--github follower-chip" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${ariaLabel}" title="GitHub — ${count} followers">${socialIcons.github}<span class="follower-chip-count" aria-hidden="true">${count}</span></a>`;
       }
 
       const label = escapeHtml(`${title} (opens in a new tab)`);
@@ -2435,6 +2453,17 @@ function spotlightMembers(list) {
   return list.filter((member) => member.socialLinks?.[state.rosterFilter]);
 }
 
+function memberHasFollowerData(member) {
+  return Number.isFinite(member.xFollowers) || Number.isFinite(member.ghFollowers);
+}
+
+function memberTotalFollowers(member) {
+  let n = 0;
+  if (Number.isFinite(member.xFollowers)) n += member.xFollowers;
+  if (Number.isFinite(member.ghFollowers)) n += member.ghFollowers;
+  return n;
+}
+
 function rosterPinOrderIndex(name) {
   const i = ROSTER_PAGE1_PIN_ORDER.indexOf(name);
   return i === -1 ? 1000 : i;
@@ -2449,7 +2478,18 @@ function hasFullDisplayName(name) {
 }
 
 function sortedSpotlightMembers(list) {
-  return [...applyPersonalFilters(spotlightMembers(list))].sort((a, b) => {
+  const filtered = [...applyPersonalFilters(spotlightMembers(list))];
+  if (state.followerSort !== "none") {
+    return filtered.sort((a, b) => {
+      const hasA = memberHasFollowerData(a);
+      const hasB = memberHasFollowerData(b);
+      if (hasA !== hasB) return hasA ? -1 : 1;
+      if (!hasA) return a.name.localeCompare(b.name);
+      const diff = memberTotalFollowers(b) - memberTotalFollowers(a);
+      return state.followerSort === "most" ? diff : -diff;
+    });
+  }
+  return filtered.sort((a, b) => {
     const pinA = rosterPinOrderIndex(a.name);
     const pinB = rosterPinOrderIndex(b.name);
     if (pinA !== pinB) return pinA - pinB;
@@ -2475,7 +2515,7 @@ function renderSpotlightFilters(list) {
     state.rosterFilter = "all";
   }
 
-  spotlightFilters.innerHTML = items
+  const filterHtml = items
     .map(
       (item) => `
         <button
@@ -2489,6 +2529,19 @@ function renderSpotlightFilters(list) {
       `,
     )
     .join("");
+
+  const hasFollowerData = uiMembers().some(memberHasFollowerData);
+  const sortHtml = hasFollowerData
+    ? `<div class="follower-sort-row">
+        <span class="follower-sort-label">Followers</span>
+        <div class="follower-sort-btns">
+          <button type="button" class="follower-sort-btn${state.followerSort === "most" ? " active" : ""}" data-follower-sort="most">Most</button>
+          <button type="button" class="follower-sort-btn${state.followerSort === "fewest" ? " active" : ""}" data-follower-sort="fewest">Fewest</button>
+        </div>
+      </div>`
+    : "";
+
+  spotlightFilters.innerHTML = filterHtml + sortHtml;
 }
 
 function renderThemePillsInto(container, compact, countSource) {
@@ -3946,6 +3999,14 @@ if (galaxySkillPills) {
 
 if (spotlightFilters) {
   spotlightFilters.addEventListener("click", (event) => {
+    const sortBtn = event.target.closest("[data-follower-sort]");
+    if (sortBtn) {
+      const dir = sortBtn.dataset.followerSort;
+      state.followerSort = state.followerSort === dir ? "none" : dir;
+      state.rosterPage = 1;
+      refreshSpotlightUI();
+      return;
+    }
     const button = event.target.closest("[data-roster-filter]");
     if (!button) return;
     state.rosterFilter = button.dataset.rosterFilter;
