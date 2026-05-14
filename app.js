@@ -1810,7 +1810,16 @@ function renderSocialIconButtons(member, btnClass) {
       const href = escapeHtml(ensureHttps(String(rawHref).trim()));
       const title = platformLabels[key] || key;
       const label = escapeHtml(`${title} (opens in a new tab)`);
-      return `<a class="${btnClass} ${btnClass}--${key}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${escapeHtml(title)}">${socialIcons[key]}</a>`;
+      if (key === "x" && member.xStatus) {
+        const tip = member.xStatus === "suspended" ? "Account suspended" : "Account deleted";
+        return `<span class="${btnClass} ${btnClass}--x social-x-gone" title="${tip}" aria-label="${tip}" role="img">${socialIcons[key]}</span>`;
+      }
+      const btn = `<a class="${btnClass} ${btnClass}--${key}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${escapeHtml(title)}">${socialIcons[key]}</a>`;
+      if (key === "x" && Number.isFinite(member.xFollowers)) {
+        const count = formatFollowers(member.xFollowers);
+        return `<span class="social-x-group"><span class="social-x-count" aria-label="${member.xFollowers} followers">${count}</span>${btn}</span>`;
+      }
+      return btn;
     })
     .filter(Boolean)
     .join("");
@@ -2191,6 +2200,13 @@ const galaxySkillPills = document.querySelector("#galaxy-skill-pills");
 
 function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatFollowers(n) {
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(n);
 }
 
 function truncate(text, max = 150) {
