@@ -956,8 +956,8 @@ function drawGalaxyPersonFocus(width, height, now, list, selected, hoveredId) {
 
 const canvas = document.querySelector("#galaxy-canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
-/** Set in `resizeCanvas` — used by atmosphere cache (avoid reading debug-only state). */
-let __galaxyResizeDpr = 1;
+/** Set in `resizeCanvas` — used by atmosphere cache and transform guard. Sentinel 0 forces first setTransform. */
+let __galaxyResizeDpr = 0;
 if (typeof ctx.imageSmoothingQuality === "string") {
   ctx.imageSmoothingQuality = "high";
 }
@@ -1196,7 +1196,7 @@ function readCanvasCssSize() {
   }
   const width = Math.max(120, Math.round(w) || 120);
   const height = Math.max(120, Math.round(h) || 120);
-  return { width, height, br: canvas.getBoundingClientRect() };
+  return { width, height };
 }
 
 /** Lower DPR when many galaxy nodes draw per frame — cuts backing-store fill cost on dense views. */
@@ -1223,8 +1223,11 @@ function resizeCanvas(visibleCountHint) {
     canvas.width = needW;
     canvas.height = needH;
   }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  __galaxyResizeDpr = dpr;
+  if (dpr !== __galaxyResizeDpr) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    __galaxyResizeDpr = dpr;
+  }
+  return { width: cssW, height: cssH };
 }
 
 /** When a single theme is shown, snap dots to Vogel targets so they are never stuck off-screen (bitmap/CSS size mismatch). */
@@ -1474,8 +1477,7 @@ function scheduleDrawFrame() {
 
 function drawFrame() {
   const list = visibleMembers();
-  resizeCanvas(list.length);
-  const { width, height, br: brSize } = readCanvasCssSize();
+  const { width, height } = resizeCanvas(list.length);
   const now = performance.now();
 
   if (galaxyFocus.mode !== "landscape") {
